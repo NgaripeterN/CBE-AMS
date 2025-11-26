@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 210 20% 96%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --dropdown-background: 210 40% 96.1%;
+
+    --primary: 222.2 84% 4.9%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 215.4 16.3% 46.9%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 215.4 16.3% 46.9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 80%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262.1 83.3% 57.8%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%; /* slate-900 */
+    --foreground: 210 40% 100%;
+
+    --card: 222 47% 16%; /* slate-800 */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --dropdown-background: 217.2 32.6% 17.5%;
+
+    --primary: 222 47% 35%; /* Brighter slate */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 3 90% 58%; /* #F44336 */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 25%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 260 60% 45%;
+  }
+}
+
+@layer components {
+  /* Calendar styling */
+  .react-calendar {
+    width: 100%;
+    border: none;
+    background-color: transparent;
+    font-family: inherit;
+  }
+
+  .react-calendar__navigation button {
+    color: hsl(var(--primary));
+    min-width: 32px;
+    background: none;
+    font-size: 1rem;
+    font-weight: bold;
+  }
+  
+  .dark .react-calendar__navigation button {
+    color: hsl(var(--primary-foreground));
+  }
+
+  .react-calendar__navigation button:enabled:hover,
+  .react-calendar__navigation button:enabled:focus {
+    background-color: hsl(var(--accent));
+  }
+  
+  .dark .react-calendar__navigation button:enabled:hover,
+  .dark .react-calendar__navigation button:enabled:focus {
+    background-color: hsl(var(--accent) / 0.5);
+  }
+
+  .react-calendar__month-view__weekdays__weekday {
+    text-align: center;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    text-decoration: none;
+    font-size: 0.75rem;
+  }
+  
+  .dark .react-calendar__month-view__weekdays__weekday {
+     color: hsl(var(--muted-foreground));
+  }
+  
+  .react-calendar__tile {
+    text-align: center;
+    padding: 0.5rem 0.25rem;
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    color: hsl(var(--foreground));
+  }
+  
+  .dark .react-calendar__tile {
+    color: hsl(var(--foreground));
+  }
+  
+  .react-calendar__tile:disabled {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .react-calendar__tile:enabled:hover,
+  .react-calendar__tile:enabled:focus {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+  
+  .dark .react-calendar__tile:enabled:hover,
+  .dark .react-calendar__tile:enabled:focus {
+    background-color: hsl(var(--accent) / 0.5);
+    color: hsl(var(--accent-foreground));
+  }
+  
+  .react-calendar__tile--now {
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+  }
+  
+  .dark .react-calendar__tile--now {
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+  }
+  
+  .react-calendar__tile--active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  
+  .dark .react-calendar__tile--active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .react-calendar__tile--hasActive {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  
+  .dark .react-calendar__tile--hasActive {
+    background: hsl(var(--primary));
+  }
+
+  .react-calendar__tile.deadline-highlight {
+    background-color: hsl(var(--destructive) / 0.2);
+    color: hsl(var(--destructive));
+  }
+  
+  .dark .react-calendar__tile.deadline-highlight {
+    background-color: hsl(var(--destructive) / 0.3);
+  }
+}

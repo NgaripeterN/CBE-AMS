@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgres:13
+    container_name: cbe-db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cbe_ams
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d cbe_ams"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cbe-network
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cbe-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '5000:5000'
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    command: sh -c "npx prisma migrate deploy && npm install && npm run db:seed && npm run dev"
+    networks:
+      - cbe-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cbe-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - cbe-network
+
+  redis:
+    image: redis:alpine
+    container_name: cbe-redis
+    restart: always
+    networks:
+      - cbe-network
+
+volumes:
+  postgres_data:
+
+networks:
+  cbe-network:
+    driver: bridge

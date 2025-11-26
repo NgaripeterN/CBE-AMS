@@ -1,0 +1,389 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import AsyncSelect from 'react-select/async';
+import { useTheme } from 'next-themes';
+import api from '../../../lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeftIcon, PlusIcon, UserPlusIcon, CalendarDaysIcon, BookOpenIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { customStyles } from '../../../styles/react-select-styles';
+import Accordion from '../../../components/Accordion';
+import useAuth from '../../../hooks/useAuth';
+import { getLeadCourse } from '../../../lib/api';
+
+const Modal = ({ children, onClose }) => (
+    <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4"
+        onClick={onClose}
+    >
+        <motion.div
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+        >
+            {children}
+        </motion.div>
+    </motion.div>
+);
+
+const OfferingsPage = () => {
+    const router = useRouter();
+    const { courseId } = router.query;
+    const { user } = useAuth();
+    const { theme } = useTheme();
+
+    const [isLead, setIsLead] = useState(false);
+    const [academicYears, setAcademicYears] = useState([]);
+    const [semesters, setSemesters] = useState([]);
+    const [selectedYearId, setSelectedYearId] = useState('');
+    const [selectedSemesterId, setSelectedSemesterId] = useState('');
+    const [selectedYearOfStudy, setSelectedYearOfStudy] = useState('');
+    
+    const [offerings, setOfferings] = useState([]);
+    const [offeringsPage, setOfferingsPage] = useState(1);
+    const [offeringsTotalPages, setOfferingsTotalPages] = useState(1);
+    const [hasMoreOfferings, setHasMoreOfferings] = useState(true);
+
+    const [allCourseModules, setAllCourseModules] = useState([]);
+    const [filteredModules, setFilteredModules] = useState([]);
+    const [yearsOfStudy, setYearsOfStudy] = useState([]);
+
+    const [isAssigning, setIsAssigning] = useState(null);
+    const [isEditingAssessors, setIsEditingAssessors] = useState(null);
+
+    const [selectedAssessors, setSelectedAssessors] = useState([]); // Changed to array
+
+    const checkIfLead = useCallback(async () => {
+        if (user && user.role === 'LEAD') {
+            try {
+                const leadCourse = await getLeadCourse();
+                if (leadCourse.course_id === courseId) {
+                    setIsLead(true);
+                }
+            } catch (error) {
+                console.error("Failed to check lead status", error);
+            }
+        }
+        if (user && user.role === 'ADMIN') {
+            setIsLead(true);
+        }
+    }, [user, courseId]);
+
+    const fetchInitialData = useCallback(async () => {
+        if (!courseId) return;
+        const [yearsRes, curriculumRes] = await Promise.all([
+            api.get('/curriculum/years', { params: { courseId } }),
+            api.get(`/curriculum/courses/${courseId}`)
+        ]);
+        
+        setAcademicYears(yearsRes.data);
+        setAllCourseModules(curriculumRes.data);
+
+        const uniqueYears = [...new Set(curriculumRes.data.map(m => m.yearOfStudy))].sort((a, b) => a - b);
+        setYearsOfStudy(uniqueYears);
+    }, [courseId]);
+
+    useEffect(() => {
+        if (router.isReady && user) {
+            fetchInitialData();
+            checkIfLead();
+        }
+    }, [router.isReady, user, checkIfLead, fetchInitialData]);
+
+    const fetchSemesters = useCallback(async (yearId) => {
+        const res = await api.get(`/curriculum/semesters/${yearId}`);
+        setSemesters(res.data);
+    }, []);
+
+    useEffect(() => {
+        if (selectedYearId) {
+            fetchSemesters(selectedYearId);
+        }
+    }, [selectedYearId, fetchSemesters]);
+
+    const fetchOfferings = useCallback(async (page = 1, append = false) => {
+        if (!selectedSemesterId) return [];
+        try {
+            const offeringsRes = await api.get(`/curriculum/offerings/${selectedSemesterId}?page=${page}&limit=5`);
+            const newOfferings = offeringsRes.data.offerings;
+            if (append) {
+                setOfferings(prev => [...prev, ...newOfferings]);
+            } else {
+                setOfferings(newOfferings);
+            }
+            setOfferingsTotalPages(offeringsRes.data.totalPages);
+            setOfferingsPage(offeringsRes.data.currentPage);
+            setHasMoreOfferings(offeringsRes.data.currentPage < offeringsRes.data.totalPages);
+            return newOfferings;
+        } catch (error) {
+            console.error("Error fetching offerings:", error);
+            setOfferings([]);
+            setOfferingsTotalPages(1);
+            setOfferingsPage(1);
+            setHasMoreOfferings(false);
+            return [];
+        }
+    }, [selectedSemesterId]);
+
+    const filterModules = useCallback(async () => {
+        if (!selectedSemesterId || !selectedYearOfStudy) {
+            setFilteredModules([]);
+            setOfferings([]); // Clear offerings when filters are not fully selected
+            setOfferingsPage(1);
+            setOfferingsTotalPages(1);
+            setHasMoreOfferings(false);
+            return;
+        }
+
+        // Fetch offerings for the first page
+        const newOfferings = await fetchOfferings(1, false);
+
+        const offeredModuleIds = newOfferings.map(o => o.moduleId); // Use the newly fetched offerings
+
+        const selectedSemester = semesters.find(s => s.id === selectedSemesterId);
+        if (!selectedSemester) return;
+
+        const semesterNumberMatch = selectedSemester.name.match(/\d+/);
+        if (!semesterNumberMatch) {
+            const unscheduled = allCourseModules.filter(cm => !offeredModuleIds.includes(cm.module_id));
+            setFilteredModules(unscheduled);
+            return;
+        }
+        const semesterNumber = parseInt(semesterNumberMatch[0], 10);
+
+        const unscheduledModulesForSemesterAndYear = allCourseModules.filter(module => {
+            const isCorrectSemester = module.semesterOfStudy === semesterNumber;
+            const isCorrectYear = module.yearOfStudy === parseInt(selectedYearOfStudy);
+            const isNotAlreadyOffered = !offeredModuleIds.includes(module.module_id);
+            return isCorrectSemester && isCorrectYear && isNotAlreadyOffered;
+        });
+
+        setFilteredModules(unscheduledModulesForSemesterAndYear);
+
+    }, [selectedSemesterId, selectedYearOfStudy, allCourseModules, semesters, fetchOfferings]);
+
+    useEffect(() => {
+        filterModules();
+    }, [selectedSemesterId, selectedYearOfStudy, filterModules]);
+
+    const handleLoadMoreOfferings = () => {
+        fetchOfferings(offeringsPage + 1, true);
+    };
+
+    const loadAssessorOptions = async (inputValue) => {
+        const res = await api.get(`/lead/assessors?search=${inputValue}`);
+        return res.data.assessors.map(user => ({
+            value: user.assessor.id,
+            label: `${user.name} (${user.email})`
+        }));
+    };
+
+    const handleAssignAssessor = async (e) => {
+        e.preventDefault();
+        const assessorIds = selectedAssessors.map(a => a.value); // Extract values
+        await api.post('/curriculum/offerings', {
+            moduleId: isAssigning.module_id,
+            semesterId: selectedSemesterId,
+            assessorIds: assessorIds, // Pass array
+        });
+        filterModules();
+        setIsAssigning(null);
+        setSelectedAssessors([]);
+    };
+
+    const handleEditAssessors = async (e) => {
+        e.preventDefault();
+        const assessorIds = selectedAssessors.map(a => a.value); // Extract values
+        await api.put(`/curriculum/offerings/${isEditingAssessors.id}/assessors`, {
+            assessorIds: assessorIds,
+        });
+        filterModules();
+        setIsEditingAssessors(null);
+        setSelectedAssessors([]);
+    };
+    
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    };
+
+    const itemVariants = {
+        hidden: { y: 20, opacity: 0 },
+        visible: { y: 0, opacity: 1 }
+    };
+
+    const groupedOfferings = offerings.reduce((acc, offering) => {
+        const year = offering.module.yearOfStudy;
+        if (!acc[year]) {
+            acc[year] = [];
+        }
+        acc[year].push(offering);
+        return acc;
+    }, {});
+
+    return (
+        <>
+            <AnimatePresence>
+                {isAssigning && isLead && (
+                    <Modal onClose={() => setIsAssigning(null)}>
+                        <div className="p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Assign Assessors to {isAssigning.title}</h2>
+                            <form onSubmit={handleAssignAssessor}>
+                                <AsyncSelect
+                                    cacheOptions
+                                    defaultOptions
+                                    isMulti // Enable multi-select
+                                    loadOptions={loadAssessorOptions}
+                                    styles={customStyles}
+                                    onChange={setSelectedAssessors}
+                                    value={selectedAssessors}
+                                    placeholder="Search for assessors..."
+                                    isClearable
+                                    className="mb-4"
+                                />
+                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={selectedAssessors.length === 0}>
+                                    <PlusIcon className="h-5 w-5" />
+                                    Assign
+                                </button>
+                            </form>
+                        </div>
+                    </Modal>
+                )}
+
+                {isEditingAssessors && isLead && (
+                    <Modal onClose={() => setIsEditingAssessors(null)}>
+                        <div className="p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Assessors for {isEditingAssessors.module.title}</h2>
+                            <form onSubmit={handleEditAssessors}>
+                                <AsyncSelect
+                                    cacheOptions
+                                    defaultOptions
+                                    isMulti
+                                    loadOptions={loadAssessorOptions}
+                                    styles={customStyles}
+                                    onChange={setSelectedAssessors}
+                                    value={selectedAssessors}
+                                    placeholder="Search for assessors..."
+                                    isClearable
+                                    className="mb-4"
+                                />
+                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={selectedAssessors.length === 0}>
+                                    <PencilIcon className="h-5 w-5" />
+                                    Update Assessors
+                                </button>
+                            </form>
+                        </div>
+                    </Modal>
+                )}
+            </AnimatePresence>
+
+            <motion.div initial="hidden" animate="visible" variants={containerVariants}>
+                <div className="flex items-center mb-6">
+                    <button onClick={() => router.back()} className="mr-4 p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                        <ArrowLeftIcon className="h-6 w-6" />
+                    </button>
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Class Scheduling & Enrollment</h1>
+                </div>
+
+                <motion.div variants={itemVariants} className="flex flex-wrap gap-4 mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                    <select value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
+                        <option value="">Select Academic Year</option>
+                        {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
+                    </select>
+                    <select value={selectedSemesterId} onChange={e => setSelectedSemesterId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" disabled={!selectedYearId}>
+                        <option value="">Select Semester</option>
+                        {semesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
+                    </select>
+                    <select value={selectedYearOfStudy} onChange={e => setSelectedYearOfStudy(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" disabled={!selectedSemesterId}>
+                        <option value="">Select Year of Study</option>
+                        {yearsOfStudy.map(year => <option key={year} value={year}>Year {year}</option>)}
+                    </select>
+                </motion.div>
+
+                {(selectedSemesterId && selectedYearOfStudy) && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <motion.div variants={itemVariants}>
+                            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Scheduled Classes</h2>
+                            {Object.keys(groupedOfferings).sort().map(year => (
+                                <Accordion key={year} title={`Year ${year}`}>
+                                    <div className="space-y-4">
+                                        {groupedOfferings[year].map(offering => (
+                                            <motion.div key={offering.id} variants={itemVariants} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-center gap-4">
+                                                        <CalendarDaysIcon className="h-8 w-8 text-green-500 dark:text-green-400" />
+                                                        <div>
+                                                            <h3 className="font-bold text-lg text-gray-900 dark:text-white">{offering.module.title}</h3>
+                                                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                                Assessors: {offering.assessors.map(oa => oa.assessor.user.name).join(', ')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {isLead && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsEditingAssessors(offering);
+                                                                setSelectedAssessors(offering.assessors.map(oa => ({
+                                                                    value: oa.assessor.id,
+                                                                    label: `${oa.assessor.user.name} (${oa.assessor.user.email})`
+                                                                })));
+                                                            }}
+                                                            className="p-2 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                            title="Edit Assessors"
+                                                        >
+                                                            <PencilIcon className="h-5 w-5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                </Accordion>
+                            ))}
+                            {offerings.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 mt-8">No classes scheduled for this semester.</p>}
+                            {hasMoreOfferings && (
+                                <div className="flex justify-center mt-4">
+                                    <button
+                                        onClick={handleLoadMoreOfferings}
+                                        className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+                                    >
+                                        Load More
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                        <motion.div variants={itemVariants}>
+                            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Unscheduled Modules</h2>
+                            <div className="space-y-4">
+                                {filteredModules.map(cm => (
+                                    <motion.div key={cm.module_id} variants={itemVariants} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+                                        <div className="flex items-center gap-4 mb-2">
+                                            <BookOpenIcon className="h-8 w-8 text-blue-500 dark:text-blue-400" />
+                                            <div>
+                                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">{cm.title}</h3>
+                                                <p className="text-sm text-gray-600 dark:text-gray-300">Year {cm.yearOfStudy}, Sem {cm.semesterOfStudy}</p>
+                                            </div>
+                                        </div>
+                                        {isLead && (
+                                            <button onClick={() => setIsAssigning(cm)} className="w-full mt-2 flex items-center justify-center gap-2 text-sm bg-blue-500 text-white py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors">
+                                                <PlusIcon className="h-4 w-4" />
+                                                Assign Assessors
+                                            </button>
+                                        )}
+                                    </motion.div>
+                                ))}
+                                {filteredModules.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 mt-8">All modules for this year and semester are scheduled.</p>}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </motion.div>
+        </>
+    );
+};
+
+export default OfferingsPage;

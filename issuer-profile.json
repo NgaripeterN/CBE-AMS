@@ -1,0 +1,8 @@
+{
+  "@context": "https://w3id.org/openbadges/v2",
+  "type": "Profile",
+  "id": "https://NgaripeterN.github.io/cbe-ams-issuer/issuer-profile.json",
+  "name": "CBE-AMS Platform",
+  "url": "https://NgaripeterN.github.io/cbe-ams-issuer/",
+  "email": "issuer@example.com"
+}
