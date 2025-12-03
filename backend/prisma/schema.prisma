@@ -7,6 +7,38 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Competency {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses                   Course[]                    @relation("CourseCompetencies")
+  modules                   Module[]                    @relation("ModuleCompetencies")
+  studentCompetencyEvidence StudentCompetencyEvidence[]
+}
+
+model StudentCompetencyEvidence {
+  id            String      @id @default(cuid())
+  student       Student     @relation(fields: [studentId], references: [id])
+  studentId     String
+  competency    Competency  @relation(fields: [competencyId], references: [id])
+  competencyId  String
+  module        Module      @relation(fields: [moduleId], references: [module_id])
+  moduleId      String
+  assessment    Assessment? @relation(fields: [assessmentId], references: [assessment_id])
+  assessmentId  String?
+  observation   Observation? @relation(fields: [observationId], references: [id])
+  observationId String?
+  status        String
+  demonstratedAt DateTime    @default(now())
+
+  @@unique([studentId, competencyId, assessmentId], name: "student_competency_assessment")
+  @@unique([studentId, competencyId, observationId], name: "student_competency_observation")
+}
+
 model User {
   user_id         String    @id @default(cuid())
   name            String
@@ -20,205 +52,292 @@ model User {
   onboardingCompleted Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  assessor        Assessor? 
+  assessor        Assessor?
   student         Student?
   otp             String?
   otpExpires      DateTime?
   otpSentAt       DateTime?
+  notifications   Notification[]
 }
 
 model Assessor {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [user_id])
+  id                String             @id @default(cuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [user_id])
   courseAssignments CourseAssignment[]
-  moduleAssignments   ModuleAssignment[]
-  enrollments         Enrollment[]
-  observations        Observation[]
+  moduleAssignments ModuleAssignment[]
+  enrollments       Enrollment[]
+  observations      Observation[]
   announcements     Announcement[]
+  offeringAssignments OfferingAssignment[]
+  createdAssessments Assessment[] @relation("CreatedAssessments")
 }
 
 model Student {
-  id              String    @id @default(cuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [user_id])
-  walletSettings  Json?
-  enrollments     Enrollment[]
-  submissions     Submission[]
-  observations    Observation[]
-  microCredentials MicroCredential[]
-  courseCredentials CourseCredential[]
+  id                          String                        @id @default(cuid())
+  userId                      String                        @unique
+  user                        User                          @relation(fields: [userId], references: [user_id])
+  walletSettings              Json?
+  enrollments                 Enrollment[]
+  submissions                 Submission[]
+  observations                StudentsOnObservations[]
+  microCredentials            MicroCredential[]
+  courseCredentials           CourseCredential[]
+  studentCompetencyEvidence   StudentCompetencyEvidence[]
 }
 
 model Course {
-  course_id         String    @id @default(cuid())
+  course_id         String             @id @default(cuid())
   name              String
-  code              String    @unique
+  code              String             @unique
   category          String?
   description       String?
   createdBy         String
-  approved          Boolean   @default(false)
+  approved          Boolean            @default(false)
   minDescriptor     String?
   weighting         Json?
   credentialModuleIds String[]
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime           @default(now())
   modules           Module[]
   courseAssignments CourseAssignment[]
   courseCredentials CourseCredential[]
+  competencies      Competency[]       @relation("CourseCompetencies")
+  academicYears     AcademicYear[]
+}
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [course_id])
+  semesters Semester[]
+
+  @@unique([name, courseId])
+}
+
+model Semester {
+  id             String       @id @default(cuid())
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  offerings      Offering[]
+
+  @@unique([name, academicYearId])
+}
+
+model Offering {
+  id         String   @id @default(cuid())
+  moduleId   String
+  module     Module   @relation(fields: [moduleId], references: [module_id])
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+  assessors  OfferingAssignment[]
+
+  @@unique([moduleId, semesterId])
+}
+
+model OfferingAssignment {
+  offeringId String
+  offering   Offering @relation(fields: [offeringId], references: [id])
+  assessorId String
+  assessor   Assessor @relation(fields: [assessorId], references: [id])
+
+  @@id([offeringId, assessorId])
 }
 
 model Module {
-  module_id         String    @id @default(cuid())
-  course_id         String
-  course            Course    @relation(fields: [course_id], references: [course_id])
-  moduleCode        String
-  title             String
-  description       String?
-  version           Int       @default(1)
-  status            ModuleStatus @default(DRAFT)
-  createdBy         String
-  createdAt         DateTime  @default(now())
-  assessments       Assessment[]
-  enrollments       Enrollment[]
-  moduleAssignments ModuleAssignment[]
-  observations      Observation[]
-  microCredentials  MicroCredential[]
-  announcements     Announcement[]
+  module_id                   String                        @id @default(cuid())
+  course_id                   String
+  course                      Course                        @relation(fields: [course_id], references: [course_id])
+  moduleCode                  String
+  title                       String
+  description                 String?
+  version                     Int                           @default(1)
+  status                      ModuleStatus                  @default(DRAFT)
+  yearOfStudy                 Int?
+  semesterOfStudy             Int?
+  createdBy                   String
+  createdAt                   DateTime                      @default(now())
+  assessments                 Assessment[]
+  enrollments                 Enrollment[]
+  moduleAssignments           ModuleAssignment[]
+  observations                Observation[]
+  microCredentials            MicroCredential[]
+  announcements               Announcement[]
+  competencies                Competency[]                  @relation("ModuleCompetencies")
+  studentCompetencyEvidence   StudentCompetencyEvidence[]
+  offerings                   Offering[]
 
   @@unique([course_id, moduleCode])
 }
 
 model CourseAssignment {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   courseId    String
-  course      Course    @relation(fields: [courseId], references: [course_id])
+  course      Course   @relation(fields: [courseId], references: [course_id])
   assessorId  String
-  assessor    Assessor  @relation(fields: [assessorId], references: [id])
+  assessor    Assessor @relation(fields: [assessorId], references: [id])
   role        CourseRole @default(GRADER)
-  assignedAt  DateTime  @default(now())
+  assignedAt  DateTime @default(now())
 
   @@unique([courseId, assessorId])
 }
 
 model ModuleAssignment {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   moduleId    String
-  module      Module    @relation(fields: [moduleId], references: [module_id])
+  module      Module   @relation(fields: [moduleId], references: [module_id])
   assessorId  String
-  assessor    Assessor  @relation(fields: [assessorId], references: [id])
+  assessor    Assessor @relation(fields: [assessorId], references: [id])
   role        ModuleRole @default(GRADER)
-  assignedAt  DateTime  @default(now())
+  assignedAt  DateTime @default(now())
 
   @@unique([moduleId, assessorId])
 }
 
 model Assessment {
-  assessment_id   String        @id @default(cuid())
-  module_id       String
-  module          Module        @relation(fields: [module_id], references: [module_id])
-  title           String
-  submissionTypes String[]
-  group           AssessmentGroup
-  rubric          Json
-  maxAttempts     Int?
-  deadline        DateTime?
-  availableFrom   DateTime?
-  createdAt       DateTime      @default(now())
-  submissions     Submission[]
+  assessment_id             String                        @id @default(cuid())
+  module_id                 String
+  module                    Module                        @relation(fields: [module_id], references: [module_id])
+  title                     String
+  description               String?
+  submissionTypes           String[]
+  group                     AssessmentGroup
+  rubric                    Json
+  maxAttempts               Int?
+  duration                  Int?
+  deadline                  DateTime?
+  availableFrom             DateTime?
+  isFinal                   Boolean                       @default(false)
+  createdAt                 DateTime                      @default(now())
+  createdByAssessorId String
+  createdByAssessor   Assessor @relation("CreatedAssessments", fields: [createdByAssessorId], references: [id])
+  submissions               Submission[]
+  studentCompetencyEvidence StudentCompetencyEvidence[]
 }
 
 model Enrollment {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   module_id   String
-  module      Module    @relation(fields: [module_id], references: [module_id])
+  module      Module   @relation(fields: [module_id], references: [module_id])
   assessor_id String
-  assessor    Assessor  @relation(fields: [assessor_id], references: [id])
+  assessor    Assessor @relation(fields: [assessor_id], references: [id])
   student_id  String
-  student     Student   @relation(fields: [student_id], references: [id])
-  enrolledAt  DateTime  @default(now())
+  student     Student  @relation(fields: [student_id], references: [id])
+  enrolledAt  DateTime @default(now())
+  status      EnrollmentStatus @default(ACTIVE)
 
   @@unique([module_id, student_id])
 }
 
 model Submission {
-  submission_id String      @id @default(cuid())
+  submission_id String     @id @default(cuid())
   assessment_id String
-  assessment    Assessment  @relation(fields: [assessment_id], references: [assessment_id])
+  assessment    Assessment @relation(fields: [assessment_id], references: [assessment_id])
   student_id    String
-  student       Student     @relation(fields: [student_id], references: [id])
+  student       Student    @relation(fields: [student_id], references: [id])
   data          Json
   grade         Json?
-  attempts      Int         @default(1)
-  createdAt     DateTime    @default(now())
+  attempts      Int        @default(1)
+  createdAt     DateTime   @default(now())
   gradedAt      DateTime?
 }
 
 model Observation {
-  id             String    @id @default(cuid())
-  module_id      String
-  module         Module    @relation(fields: [module_id], references: [module_id])
-  assessor_id    String
-  assessor       Assessor  @relation(fields: [assessor_id], references: [id])
-  student_id     String
-  student        Student   @relation(fields: [student_id], references: [id])
-  competencyTags String[]
-  numericScore   Int?
-  descriptor     String?
-  notes          String?
-  media          Json?
-  recordedAt     DateTime  @default(now())
+  id                        String                        @id @default(cuid())
+  module_id                 String
+  module                    Module                        @relation(fields: [module_id], references: [module_id])
+  assessor_id               String
+  assessor                  Assessor                      @relation(fields: [assessor_id], references: [id])
+  students                  StudentsOnObservations[]
+  competencyTags            String[]
+  numericScore              Int?
+  maxScore                  Int?
+  descriptor                String?
+  notes                     String?
+  media                     Json?
+  recordedAt                DateTime                      @default(now())
+  group                     AssessmentGroup               @default(FORMATIVE)
+  isFinal                   Boolean                       @default(false)
+  studentCompetencyEvidence StudentCompetencyEvidence[]
 }
 
 model MicroCredential {
-  id            String    @id @default(cuid())
-  student_id    String
-  student       Student   @relation(fields: [student_id], references: [id])
-  module_id     String
-  module        Module    @relation(fields: [module_id], references: [module_id])
-  descriptor    String
-  score         Int?
-  issuedAt      DateTime?
-  txHash        String?
-  status        CredentialStatus @default(PENDING)
-  payloadJson   Json
-  type          CredentialType @default(MICRO_CREDENTIAL)
+  id          String           @id @default(cuid())
+  student_id  String
+  student     Student          @relation(fields: [student_id], references: [id])
+  module_id   String
+  module      Module           @relation(fields: [module_id], references: [module_id])
+  descriptor  String
+  score       Int?
+  issuedAt    DateTime?
+  txHash      String?
+  status      CredentialStatus @default(PENDING)
+  payloadJson Json
+  type        CredentialType   @default(MICRO_CREDENTIAL)
 }
 
 model CourseCredential {
-  id            String    @id @default(cuid())
-  student_id    String
-  student       Student   @relation(fields: [student_id], references: [id])
-  course_id     String
-  course        Course    @relation(fields: [course_id], references: [course_id])
-  descriptor    String
-  evidenceModuleIds String[]
+  id                         String   @id @default(cuid())
+  student_id                 String
+  student                    Student  @relation(fields: [student_id], references: [id])
+  course_id                  String
+  course                     Course   @relation(fields: [course_id], references: [course_id])
+  descriptor                 String
+  evidenceModuleIds          String[]
   evidenceMicroCredentialIds String[]
-  issuedAt      DateTime?
-  txHash        String?
-  status        CredentialStatus @default(PENDING)
-  payloadJson   Json
+  issuedAt                   DateTime?
+  txHash                     String?
+  status                     CredentialStatus @default(PENDING)
+  payloadJson                Json
+
+  @@unique([student_id, course_id])
 }
 
 model Audit {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   who       String
   action    String
   entity    String
   entityId  String
   before    Json?
   after     Json?
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [user_id])
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model Announcement {
-  id        String    @id @default(cuid())
-  title     String
-  content   String
-  moduleId  String
-  module    Module    @relation(fields: [moduleId], references: [module_id])
+  id         String   @id @default(cuid())
+  title      String
+  content    String
+  moduleId   String
+  module     Module   @relation(fields: [moduleId], references: [module_id])
   assessorId String
-  assessor  Assessor @relation(fields: [assessorId], references: [id])
-  createdAt DateTime  @default(now())
+  assessor   Assessor @relation(fields: [assessorId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model StudentsOnObservations {
+  student        Student     @relation(fields: [studentId], references: [id])
+  studentId      String
+  observation    Observation @relation(fields: [observationId], references: [id])
+  observationId  String
+  assignedAt     DateTime    @default(now())
+  assignedBy     String // User ID of the assessor who assigned the student to this observation
+
+  @@id([studentId, observationId])
 }
 
 enum Role {
@@ -230,6 +349,11 @@ enum Role {
 enum UserStatus {
   ACTIVE
   PENDING_PASSWORD_CHANGE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  INACTIVE
 }
 
 enum AssessmentGroup {

@@ -89,7 +89,7 @@ const verifyOtp = async (req, res) => {
     const { effectiveRole, leadForCourseId } = await getEffectiveUserRoles(user);
 
     const token = jwt.sign(
-      { userId: user.user_id, role: effectiveRole, leadForCourseId },
+      { userId: user.user_id, role: effectiveRole, leadForCourseId, name: user.name },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );

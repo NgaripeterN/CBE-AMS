@@ -4,7 +4,7 @@ const prisma = require('../lib/prisma');
 // @route   POST /api/lead/create-module
 // @access  Private/Lead
 const createModule = async (req, res) => {
-  const { course_id, moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy } = req.body;
+  const { course_id, moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy, competencyIds } = req.body;
   const createdBy = req.user.userId;
 
   if (!course_id || !moduleCode || !title) {
@@ -38,6 +38,12 @@ const createModule = async (req, res) => {
         yearOfStudy,
         semesterOfStudy,
         createdBy: createdBy, // Correctly assign the creator's user ID.
+        competencies: {
+          connect: competencyIds ? competencyIds.map(id => ({ id })) : [],
+        },
+      },
+      include: {
+        competencies: true, // Include competencies to return
       },
     });
     res.status(201).json(module);
@@ -255,7 +261,7 @@ const getLeadByUserId = async (userId) => {
 
 const updateModule = async (req, res) => {
   const { module_id } = req.params;
-  const { moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy } = req.body;
+  const { moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy, competencyIds } = req.body;
   const userId = req.user.userId;
 
   try {
@@ -295,6 +301,12 @@ const updateModule = async (req, res) => {
         status,
         yearOfStudy,
         semesterOfStudy,
+        competencies: {
+          set: competencyIds ? competencyIds.map(id => ({ id })) : [],
+        },
+      },
+      include: {
+        competencies: true, // Include competencies in the response
       },
     });
 
@@ -501,6 +513,7 @@ const getCourseById = async (req, res) => {
       where: { course_id: course_id },
       include: {
         modules: true,
+        competencies: true, // Include the course's competencies
         courseAssignments: {
           include: {
             assessor: {
@@ -553,7 +566,8 @@ const getStudentsForCourse = async (req, res) => {
 };
 
 const importModules = async (req, res) => {
-  const { course_id, modules } = req.body;
+  const { course_id } = req.query;
+  const { modules } = req.body;
   const createdBy = req.user.userId;
 
   if (!course_id || !modules || !Array.isArray(modules)) {
@@ -564,25 +578,47 @@ const importModules = async (req, res) => {
   const duplicates = [];
   const errors = [];
 
-  for (const moduleData of modules) {
-    const { moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy } = moduleData;
+  try {
+    const allCompetencyNames = [...new Set(modules.flatMap(m => m.competencyNames || []))];
+    const competenciesFromDb = await prisma.competency.findMany({
+      where: { name: { in: allCompetencyNames, mode: 'insensitive' } },
+      select: { id: true, name: true },
+    });
+    
+    const competencyNameToIdMap = new Map(competenciesFromDb.map(c => [c.name.toLowerCase(), c.id]));
 
-    if (!moduleCode || !title) {
-      errors.push({ ...moduleData, error: 'moduleCode and title are required' });
-      continue;
-    }
+    for (const moduleData of modules) {
+      const { moduleCode, title, description, version, status, yearOfStudy, semesterOfStudy, competencyNames } = moduleData;
 
-    try {
-      const existingModule = await prisma.module.findFirst({
-        where: {
-          course_id,
-          moduleCode,
-        },
-      });
+      if (!moduleCode || !title) {
+        errors.push({ title: moduleData.title || 'N/A', moduleCode: moduleData.moduleCode || 'N/A', error: 'moduleCode and title are required' });
+        continue;
+      }
 
-      if (existingModule) {
-        duplicates.push(moduleData);
-      } else {
+      try {
+        const existingModule = await prisma.module.findFirst({
+          where: { course_id, moduleCode },
+        });
+
+        if (existingModule) {
+          duplicates.push(moduleData);
+          continue;
+        }
+
+        const foundCompetencyIds = [];
+        const missingCompetencyNames = [];
+
+        if (competencyNames) {
+          for (const name of competencyNames) {
+            const id = competencyNameToIdMap.get(name.toLowerCase());
+            if (id) {
+              foundCompetencyIds.push(id);
+            } else {
+              missingCompetencyNames.push(name);
+            }
+          }
+        }
+
         const newModule = await prisma.module.create({
           data: {
             course: { connect: { course_id } },
@@ -594,13 +630,27 @@ const importModules = async (req, res) => {
             yearOfStudy: yearOfStudy ? parseInt(yearOfStudy, 10) : undefined,
             semesterOfStudy: semesterOfStudy ? parseInt(semesterOfStudy, 10) : undefined,
             createdBy,
+            competencies: {
+              connect: foundCompetencyIds.map(id => ({ id })),
+            },
           },
         });
         created.push(newModule);
+
+        if (missingCompetencyNames.length > 0) {
+          errors.push({
+            title: newModule.title,
+            moduleCode: newModule.moduleCode,
+            error: `Module created, but the following competencies were not found and could not be associated: ${missingCompetencyNames.join(', ')}`,
+          });
+        }
+      } catch (error) {
+        errors.push({ title: moduleData.title, moduleCode: moduleData.moduleCode, error: error.message });
       }
-    } catch (error) {
-      errors.push({ ...moduleData, error: error.message });
     }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'An unexpected error occurred during the import process.' });
   }
 
   res.status(201).json({
@@ -610,6 +660,7 @@ const importModules = async (req, res) => {
     errors,
   });
 };
+
 
 const assignAssessorToStudent = async (req, res) => {
     const { enrollmentId, assessorId } = req.body;

@@ -43,16 +43,26 @@ router.post('/years', isAuthenticated, isCourseLead, async (req, res) => {
     }
 });
 
-router.get('/years', isAuthenticated, async (req, res) => {
+router.get('/years', isAuthenticated, isCourseLead, async (req, res) => {
     try {
-        const { courseId } = req.query;
+        const { courseId: queryCourseId } = req.query; // Renamed to avoid shadowing
         const where = {};
-        if (courseId) {
-            where.courseId = courseId;
-        } else if (req.user.role === 'LEAD') {
-            where.courseId = req.user.leadCourseId;
-        }
 
+        // If a specific courseId is requested in the query, use it
+        if (queryCourseId) {
+            where.courseId = queryCourseId;
+        } else if (req.user.role === 'LEAD') {
+            // If the user is a LEAD and no specific courseId is queried, use their assigned leadCourseId
+            if (!req.user.leadCourseId) {
+                return res.status(403).json({ error: 'Lead is not assigned to any course.' });
+            }
+            where.courseId = req.user.leadCourseId;
+        } else if (req.user.role !== 'ADMIN') {
+            // For non-admin, non-lead users trying to access without courseId
+            return res.status(403).json({ error: 'Access denied: Missing course context.' });
+        }
+        // Admins can view all academic years if no courseId is specified, so no 'else if' for them here.
+        
         const academicYears = await prisma.academicYear.findMany({ 
             where, 
             orderBy: { startDate: 'desc' },
@@ -284,6 +294,7 @@ router.get('/courses/:courseId', isAuthenticated, isCourseLead, async (req, res)
         const curriculum = await prisma.module.findMany({
             where: { course_id: courseId },
             orderBy: [{ yearOfStudy: 'asc' }, { semesterOfStudy: 'asc' }],
+            include: { competencies: true }, // Ensure competencies are included
         });
         res.status(200).json(curriculum);
     } catch (error) {

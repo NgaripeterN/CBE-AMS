@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import ErrorModal from '../../components/ErrorModal';
+import CompetencySelector from '../../components/CompetencySelector';
 
 const CreateModulePage = () => {
   const router = useRouter();
@@ -23,12 +24,27 @@ const CreateModulePage = () => {
   });
   const [error, setError] = useState('');
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [courseCompetencies, setCourseCompetencies] = useState([]);
+  const [selectedCompetencyIds, setSelectedCompetencyIds] = useState([]);
 
   useEffect(() => {
-    if (router.isReady) {
+    if (router.isReady && course_id) {
+      const fetchCourseData = async () => {
+        try {
+          const res = await api.get(`/lead/courses/${course_id}`); // This should fetch course with its competencies
+          setCourseCompetencies(res.data.competencies || []); // Correctly set competencies from the course
+        } catch (err) {
+          setError('Failed to fetch course competencies.');
+          setIsErrorModalOpen(true);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchCourseData();
+    } else if (router.isReady) {
       setIsLoading(false);
     }
-  }, [router.isReady]);
+  }, [router.isReady, course_id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -73,9 +89,11 @@ const CreateModulePage = () => {
         ...formData,
         yearOfStudy: year,
         semesterOfStudy: semester,
+        competencyIds: selectedCompetencyIds, // Include selected competencies
       });
       toast.success(`Module '${response.data.title}' created successfully!`);
       setFormData({ moduleCode: '', title: '', description: '', version: '1', status: 'DRAFT', yearOfStudy: '1', semesterOfStudy: '1' });
+      setSelectedCompetencyIds([]); // Clear selected competencies
       setTimeout(() => router.push(`/assessor/course-management/${course_id}`), 2000);
     } catch (err) {
       setError(err.response?.data?.error || 'An error occurred while creating the module.');
@@ -90,7 +108,7 @@ const CreateModulePage = () => {
   return (
     <Fragment>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 min-h-screen flex items-center justify-center">
-        <div className="max-w-2xl mx-auto bg-card rounded-xl shadow-lg p-4 mt-[-4rem]">
+        <div className="max-w-2xl mx-auto bg-card rounded-xl shadow-lg p-4">
           <header className="mb-6 flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Create a New Module</h1>
@@ -188,6 +206,16 @@ const CreateModulePage = () => {
                   <option value="DEPRECATED">Deprecated</option>
                 </select>
               </div>
+            </div>
+
+            <div className="mt-6 md:col-span-2">
+              <h2 className="text-xl font-bold text-foreground mb-2">Associate Competencies</h2>
+              <p className="text-muted-foreground mb-4">Select competencies relevant to this module.</p>
+              <CompetencySelector
+                availableCompetencies={courseCompetencies}
+                selectedIds={selectedCompetencyIds}
+                onChange={setSelectedCompetencyIds}
+              />
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-4">

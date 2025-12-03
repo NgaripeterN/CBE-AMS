@@ -50,9 +50,6 @@ jspm_packages/
 # MinIO
 minio-data/
 
-# Prisma
-/backend/prisma/migrations/
-
 # Docker
 docker-compose.override.yml
 

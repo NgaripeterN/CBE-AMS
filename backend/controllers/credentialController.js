@@ -58,7 +58,7 @@ const sendShareEmail = async (req, res) => {
         const credentialFileName = `${credential.payloadJson.badge.name.replace(/\s+/g, '_')}_credential.json`;
 
         const mailOptions = {
-            from: `"CBE-AMS Platform" <no-reply@cbe-ams.com>`,
+            from: "CBE-AMS Platform <no-reply@cbe-ams.com>",
             to: recipientEmail,
             subject: `You have received a credential from ${user.name}`,
             text: `Hello,\n\nPlease find attached the digital credential "${credential.payloadJson.badge.name}" from ${user.name}.\n\nYou can verify this credential by uploading the attached JSON file at ${process.env.FRONTEND_URL}/verify.\n\nThank you,\nThe CBE-AMS Team`,

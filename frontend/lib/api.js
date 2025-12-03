@@ -563,7 +563,7 @@ export const migrateStudents = async (moduleId, oldAssessorId, newAssessorId) =>
 export const getSubmissionMediaUrl = async (submissionId, questionIndex) => {
   try {
     const { data } = await api.get(`/assessor/submissions/${submissionId}/media/${questionIndex}/url`);
-    return data;
+    return data.url;
   } catch (error) {
     if (error.response) {
       throw error;

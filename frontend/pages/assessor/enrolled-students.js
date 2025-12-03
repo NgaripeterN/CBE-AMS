@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import ConfirmUnenrollModal from '../../components/ConfirmUnenrollModal';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast'; // Import react-hot-toast
 
 const EnrolledStudents = () => {
   const router = useRouter();
@@ -39,8 +40,10 @@ const EnrolledStudents = () => {
     try {
       await api.delete(`/assessor/enrollments/${selectedEnrollment.id}`);
       setEnrollments(enrollments.filter(e => e.id !== selectedEnrollment.id));
+      toast.success('Student unenrolled successfully.'); // Use toast.success
     } catch (err) {
-      setError('Failed to unenroll student.');
+      console.error("Unenrollment error:", err);
+      toast.error('Failed to unenroll student.'); // Use toast.error
     }
     setIsModalOpen(false);
   };

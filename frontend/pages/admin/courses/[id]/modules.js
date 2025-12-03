@@ -3,9 +3,11 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Select from 'react-select';
 import { useTheme } from 'next-themes';
-import { getModulesForCourse, getCourse } from '../../../../lib/api';
+import toast from 'react-hot-toast';
+import api, { getModulesForCourse, getCourse } from '../../../../lib/api';
 import { customStyles } from '../../../../styles/react-select-styles';
-import { BookOpenIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { BookOpenIcon, ArrowLeftIcon, PencilIcon } from '@heroicons/react/24/outline';
+import CompetencySelector from '../../../../components/CompetencySelector';
 
 const CourseModulesPage = () => {
   const router = useRouter();
@@ -20,38 +22,64 @@ const CourseModulesPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { theme } = useTheme();
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [selectedCompetencyIds, setSelectedCompetencyIds] = useState([]);
+
   useEffect(() => {
-    console.log('useEffect triggered. id:', id);
     if (id) {
       const fetchModules = async () => {
         try {
-          console.log('Fetching modules and course for id:', id);
           const [modulesResponse, courseResponse] = await Promise.all([
             getModulesForCourse(id, page, limit, searchQuery),
             getCourse(id),
           ]);
-          console.log('modulesResponse:', modulesResponse);
-          console.log('courseResponse:', courseResponse);
           setModules(modulesResponse.data);
           setTotal(modulesResponse.total);
           setCourse(courseResponse);
         } catch (err) {
-          console.error('Error fetching data:', err);
           setError(err.message || 'Failed to fetch data');
         } finally {
           setIsLoading(false);
-          console.log('setIsLoading(false) called.');
         }
       };
       fetchModules();
-    } else {
-      console.log('id is not yet available.');
     }
   }, [id, page, limit, searchQuery]);
 
   const handleSearch = (selectedOption) => {
     setSearchQuery(selectedOption ? selectedOption.value : '');
     setPage(1);
+  };
+
+  const openCompetencyModal = (module) => {
+    setSelectedModule(module);
+    setSelectedCompetencyIds(module.competencies.map(c => c.id));
+    setIsModalOpen(true);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!selectedModule) return;
+
+    const promise = api.put(`/modules/${selectedModule.module_id}/competencies`, {
+      competencyIds: selectedCompetencyIds,
+    });
+
+    toast.promise(promise, {
+      loading: 'Saving competencies...',
+      success: (res) => {
+        // Update the local state to reflect the changes
+        const updatedModules = modules.map(m =>
+          m.module_id === selectedModule.module_id ? { ...m, competencies: res.data.competencies } : m
+        );
+        setModules(updatedModules);
+        setIsModalOpen(false);
+        return 'Competencies updated successfully.';
+      },
+      error: (err) => {
+        return err.response?.data?.error || 'Failed to save competencies.';
+      },
+    });
   };
 
   if (isLoading) {
@@ -94,6 +122,7 @@ const CourseModulesPage = () => {
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Title</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Code</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Competencies</th>
               <th scope="col" className="relative px-6 py-3">
                 <span className="sr-only">Actions</span>
               </th>
@@ -104,8 +133,14 @@ const CourseModulesPage = () => {
               <tr key={module.module_id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">{module.title}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">{module.moduleCode}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  {module.competencies?.length || 0}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  {/* Add actions here */}
+                  <button onClick={() => openCompetencyModal(module)} className="text-primary hover:text-primary/90">
+                    <PencilIcon className="h-5 w-5 mr-2 inline-block"/>
+                    Manage Competencies
+                  </button>
                 </td>
               </tr>
             ))}
@@ -136,6 +171,21 @@ const CourseModulesPage = () => {
           </button>
         </div>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-2xl">
+            <h3 className="text-lg font-medium leading-6 text-foreground">Manage Competencies for {selectedModule?.title}</h3>
+            <div className="mt-4">
+              <CompetencySelector selectedIds={selectedCompetencyIds} onChange={setSelectedCompetencyIds} />
+            </div>
+            <div className="flex justify-end space-x-2 pt-4 mt-4 border-t border-border">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80">Cancel</button>
+              <button type="button" onClick={handleSaveChanges} className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

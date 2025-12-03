@@ -1,22 +1,31 @@
 import { useState, useEffect } from 'react';
 
-const Timer = ({ duration, onStart, onTimeUp, isStarted, isEligible }) => {
-  const [remainingTime, setRemainingTime] = useState(duration * 60);
+const Timer = ({ duration, startTime, onTimeUp, isStarted }) => {
+  const [remainingTime, setRemainingTime] = useState(0);
 
   useEffect(() => {
-    if (!isStarted || remainingTime <= 0) {
-      if (isStarted && remainingTime <= 0) {
-        onTimeUp();
-      }
+    if (!isStarted || !startTime) {
+      setRemainingTime(duration * 60);
       return;
     }
 
-    const timer = setInterval(() => {
-      setRemainingTime(prevTime => prevTime - 1);
-    }, 1000);
+    const endTime = startTime + (duration * 60 * 1000);
+
+    const updateRemainingTime = () => {
+      const now = Date.now();
+      const newRemaining = Math.max(0, Math.floor((endTime - now) / 1000));
+      setRemainingTime(newRemaining);
+
+      if (newRemaining === 0) {
+        onTimeUp();
+      }
+    };
+    
+    updateRemainingTime(); // Initial update
+    const timer = setInterval(updateRemainingTime, 1000);
 
     return () => clearInterval(timer);
-  }, [isStarted, remainingTime, onTimeUp]);
+  }, [isStarted, startTime, duration, onTimeUp]);
 
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60);
@@ -25,17 +34,7 @@ const Timer = ({ duration, onStart, onTimeUp, isStarted, isEligible }) => {
   };
 
   if (!isStarted) {
-    return (
-        <div className="mt-8 text-right">
-            {isEligible && (
-                <button
-                onClick={onStart}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                    Start Assessment
-                </button>
-            )}
-      </div>
-    );
+    return null; // The parent component will handle the start button
   }
   
   const isTimeLow = remainingTime <= 300; // 5 minutes

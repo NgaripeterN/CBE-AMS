@@ -167,9 +167,9 @@ const AssessmentSubmissionPage = () => {
   if (error && !isErrorModalOpen) return <div className="flex justify-center items-center min-h-screen bg-background"><p className="text-lg text-destructive">{error}</p></div>;
   if (!assessment) return <div className="flex justify-center items-center min-h-screen bg-background"><p className="text-lg text-foreground">Assessment not found.</p></div>;
 
-  const { title, description, rubric, deadline, maxAttempts, submissions, createdBy } = assessment;
+  const { title, description, rubric, deadline, maxAttempts, submissions, createdByAssessor: createdBy } = assessment;
   const isEligible = new Date(deadline) > new Date() && submissions.length < maxAttempts;
-  const questions = rubric.questions;
+  const questions = Array.isArray(rubric) ? rubric : rubric?.questions || [];
 
   const renderQuestions = () => (
     <form onSubmit={handleSubmit} className="space-y-8 mt-6">
@@ -197,16 +197,25 @@ const AssessmentSubmissionPage = () => {
                 ))}
               </div>
             )}
-            {q.type === 'TEXT' && (
-              <textarea
-                rows="5"
+            {(q.type === 'TEXT' || q.type === 'SHORT_ANSWER' || q.type === 'SHORT_TEXT') && (
+              <input
+                type="text"
                 value={answers[index] || ''}
                 onChange={(e) => handleInputChange(index, e.target.value)}
                 className="w-full p-3 border rounded-md bg-background border-border focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Type your answer here..."
+              />
+            )}
+            {(q.type === 'LONG_ANSWER' || q.type === 'LONG_TEXT') && (
+              <textarea
+                rows="8"
+                value={answers[index] || ''}
+                onChange={(e) => handleInputChange(index, e.target.value)}
+                className="w-full p-3 border rounded-md bg-background border-border focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="Type your detailed answer here..."
               ></textarea>
             )}
-            {(q.type === 'FILE' || q.type === 'MEDIA') && (
+            {(q.type === 'FILE' || q.type === 'MEDIA' || q.type === 'FILE_UPLOAD') && (
               <div className="flex items-center space-x-4">
                 <label className="flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-sm tracking-wide uppercase border border-transparent cursor-pointer hover:bg-primary/90">
                   <FiUpload className="w-6 h-6 mr-2" />
@@ -296,7 +305,7 @@ const AssessmentSubmissionPage = () => {
           <div className="lg:col-span-2">
             <div className="bg-card p-8 rounded-2xl shadow-lg border border-border">
               {isEligible ? (
-                assessment.duration ? (
+                (assessment.duration > 0) ? (
                   <div className="text-center">
                     <FiClock className="mx-auto h-12 w-12 text-primary mb-4" />
                     <h2 className="text-2xl font-bold mb-2">Timed Assessment</h2>
@@ -308,16 +317,16 @@ const AssessmentSubmissionPage = () => {
                     </Link>
                   </div>
                 ) : (
-                  isAttempting ? renderQuestions() : (
-                    <div className="text-center">
-                      <FiFileText className="mx-auto h-12 w-12 text-primary mb-4" />
-                      <h2 className="text-2xl font-bold mb-2">Ready to Begin?</h2>
-                      <p className="text-muted-foreground mb-6">You can start this assessment now. Your progress will be saved as you go.</p>
-                      <button onClick={() => setIsAttempting(true)} className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                  <div className="text-center">
+                    <FiFileText className="mx-auto h-12 w-12 text-primary mb-4" />
+                    <h2 className="text-2xl font-bold mb-2">Ready to Begin?</h2>
+                    <p className="text-muted-foreground mb-6">You can start this assessment now. Your progress will be saved as you go.</p>
+                    <Link href={`/student/assessments/start/${assessment_id}`} legacyBehavior>
+                      <a className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                         Start Assessment
-                      </button>
-                    </div>
-                  )
+                      </a>
+                    </Link>
+                  </div>
                 )
               ) : (
                 <div className="text-center">

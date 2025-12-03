@@ -1,6 +1,10 @@
 import React from 'react';
 
-const ConfirmSaveChangesModal = ({ onConfirm, onClose, title, message }) => {
+const ConfirmSaveChangesModal = ({ isOpen, onConfirm, onClose, title, message, confirmText }) => {
+  if (!isOpen) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
       <div className="bg-card rounded-lg shadow-xl p-8 w-full max-w-md">
@@ -13,7 +17,7 @@ const ConfirmSaveChangesModal = ({ onConfirm, onClose, title, message }) => {
             Cancel
           </button>
           <button onClick={onConfirm} className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/80">
-            Confirm
+            {confirmText || 'Confirm'}
           </button>
         </div>
       </div>

@@ -12,8 +12,25 @@ const SubmissionsPage = () => {
   useEffect(() => {
     const fetchFeed = async () => {
       try {
-        const { data } = await api.get('/student/submissions');
-        setFeed(data);
+        const { data } = await api.get(`/student/submissions?time=${new Date().getTime()}`);
+        const formattedData = data.map(item => {
+          if (item.type === 'submission' && typeof item.assessment.rubric === 'string') {
+            try {
+              item.assessment.rubric = JSON.parse(item.assessment.rubric);
+            } catch (e) {
+              console.error('Failed to parse rubric', e);
+            }
+          }
+          if (item.type === 'submission' && typeof item.grade === 'string') {
+            try {
+              item.grade = JSON.parse(item.grade);
+            } catch (e) {
+              console.error('Failed to parse grade', e);
+            }
+          }
+          return item;
+        });
+        setFeed(formattedData);
       } catch (err) {
         setError('Failed to load submissions and observations. Please try again later.');
       } finally {
@@ -125,6 +142,16 @@ const SubmissionsPage = () => {
                                             <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
                                               Submitted on: {new Date(item.createdAt).toLocaleString()}
                                             </p>
+                                            {item.grade && item.grade.questionScores && (
+                                              <p className="text-gray-700 dark:text-gray-300 text-sm mt-1">
+                                                <strong>Grade:</strong> {(() => {
+                                                  const totalScore = item.grade.questionScores.reduce((acc, qs) => acc + qs.score, 0);
+                                                  const totalPossibleMarks = item.assessment.rubric.questions.reduce((acc, q) => acc + q.marks, 0);
+                                                  const percentage = totalPossibleMarks > 0 ? (totalScore / totalPossibleMarks) * 100 : 0;
+                                                  return `${totalScore} / ${totalPossibleMarks} (${percentage.toFixed(0)}%)`;
+                                                })()}
+                                              </p>
+                                            )}
                                             <div className="mt-4 text-right">
                                               <Link href={`/student/submissions/${item.submission_id}`} legacyBehavior>
                                                 <a className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">

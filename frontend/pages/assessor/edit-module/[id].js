@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import api from '../../../lib/api';
 import Loading from '../../../components/Loading';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import CompetencySelector from '../../../components/CompetencySelector';
+import toast from 'react-hot-toast';
 
 const EditModulePage = () => {
   const router = useRouter();
@@ -20,28 +22,36 @@ const EditModulePage = () => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [moduleCompetencies, setModuleCompetencies] = useState([]); // All competencies for the course
+  const [selectedCompetencyIds, setSelectedCompetencyIds] = useState([]); // Competencies currently selected for this module
 
   useEffect(() => {
     if (id) {
-      const fetchModule = async () => {
+      const fetchModuleAndCourseCompetencies = async () => {
         try {
-          const { data } = await api.get(`/modules/${id}`);
+          const { data: moduleData } = await api.get(`/modules/${id}`);
           setFormData({
-            moduleCode: data.moduleCode,
-            title: data.title,
-            description: data.description || '',
-            version: data.version.toString(),
-            status: data.status,
-            yearOfStudy: data.yearOfStudy?.toString() || '',
-            semesterOfStudy: data.semesterOfStudy?.toString() || '',
+            moduleCode: moduleData.moduleCode,
+            title: moduleData.title,
+            description: moduleData.description || '',
+            version: moduleData.version.toString(),
+            status: moduleData.status,
+            yearOfStudy: moduleData.yearOfStudy?.toString() || '',
+            semesterOfStudy: moduleData.semesterOfStudy?.toString() || '',
           });
+          setSelectedCompetencyIds(moduleData.competencies.map(c => c.id));
+
+          // Fetch all competencies for the course this module belongs to
+          const { data: courseData } = await api.get(`/lead/courses/${moduleData.course_id}`);
+          setModuleCompetencies(courseData.competencies); // Assuming courseData has competencies directly linked
+          
           setIsLoading(false);
         } catch (err) {
-          setError('Failed to fetch module data.');
+          setError('Failed to fetch module data or course competencies.');
           setIsLoading(false);
         }
       };
-      fetchModule();
+      fetchModuleAndCourseCompetencies();
     }
   }, [id]);
 
@@ -61,11 +71,13 @@ const EditModulePage = () => {
         version: parseInt(formData.version),
         yearOfStudy: parseInt(formData.yearOfStudy),
         semesterOfStudy: parseInt(formData.semesterOfStudy),
+        competencyIds: selectedCompetencyIds, // Include selected competencies
       });
-      setSuccess(`Module '${response.data.title}' updated successfully!`);
+      toast.success(`Module &apos;${response.data.title}&apos; updated successfully!`);
       setTimeout(() => router.back(), 2000);
     } catch (err) {
       setError(err.response?.data?.error || 'An error occurred while updating the module.');
+      toast.error(err.response?.data?.error || 'An error occurred while updating the module.');
     }
   };
 
@@ -122,6 +134,16 @@ const EditModulePage = () => {
                   <option value="DEPRECATED">Deprecated</option>
                 </select>
               </div>
+            </div>
+
+            <div className="mt-6 md:col-span-2">
+              <h2 className="text-xl font-bold text-foreground mb-2">Associate Competencies</h2>
+              <p className="text-muted-foreground mb-4">Select competencies relevant to this module. These will be filtered by the course&apos;s associated competencies.</p>
+              <CompetencySelector
+                availableCompetencies={moduleCompetencies} // These are competencies associated with the module's course
+                selectedIds={selectedCompetencyIds}
+                onChange={setSelectedCompetencyIds}
+              />
             </div>
 
             <div className="mt-10 flex items-center justify-end gap-4">

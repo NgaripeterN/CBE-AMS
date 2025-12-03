@@ -6,7 +6,6 @@ import { ArrowLeftIcon, BookOpenIcon, PencilIcon, TrashIcon, StarIcon } from '@h
 import { StarIcon as SolidStarIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import ConfirmDeleteModal from '../../../components/ConfirmDeleteModal';
-import EditModuleModal from '../../../components/EditModuleModal';
 import Accordion from '../../../components/Accordion';
 import CredentialRequirementsModal from '../../../components/CredentialRequirementsModal';
 import Link from 'next/link';
@@ -16,21 +15,22 @@ const CurriculumPage = () => {
     const { courseId } = router.query;
     const [course, setCourse] = useState(null);
     const [curriculum, setCurriculum] = useState([]);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedModule, setSelectedModule] = useState(null);
     const [credentialModules, setCredentialModules] = useState(new Set());
     const [initialCredentialModules, setInitialCredentialModules] = useState(new Set());
     const [isConfirmModalOpen, setConfirmModalOpen] = useState(false);
     const [changedModules, setChangedModules] = useState({ added: [], removed: [] });
+    const [courseCompetencies, setCourseCompetencies] = useState([]); // State for competencies associated with the course
 
     const fetchCourseDetails = useCallback(async () => {
         try {
-            const res = await api.get(`/lead/courses/${courseId}`);
+            const res = await api.get(`/lead/courses/${courseId}`); // Assuming this endpoint now includes course.competencies
             setCourse(res.data);
             const initialModules = new Set(res.data.credentialModuleIds || []);
             setCredentialModules(initialModules);
             setInitialCredentialModules(initialModules);
+            setCourseCompetencies(res.data.competencies || []); // Set course competencies
         } catch (error) {
             console.error("Failed to fetch course details", error);
         }
@@ -38,6 +38,7 @@ const CurriculumPage = () => {
 
     const fetchCurriculum = useCallback(async () => {
         try {
+            // Ensure this endpoint fetches modules with their associated competencies
             const res = await api.get(`/curriculum/courses/${courseId}`);
             setCurriculum(res.data);
         } catch (error) {
@@ -53,8 +54,7 @@ const CurriculumPage = () => {
     }, [courseId, fetchCourseDetails, fetchCurriculum]);
 
     const handleEdit = (module) => {
-        setSelectedModule(module);
-        setIsEditModalOpen(true);
+        router.push(`/assessor/modules/${module.module_id}/edit`); // Redirect to dedicated edit page
     };
 
     const handleDelete = (module) => {
@@ -72,15 +72,7 @@ const CurriculumPage = () => {
         }
     };
 
-    const handleUpdate = async (updatedModule) => {
-        try {
-            await api.put(`/lead/modules/${selectedModule.module_id}`, updatedModule);
-            fetchCurriculum();
-            setIsEditModalOpen(false);
-        } catch (error) {
-            console.error("Failed to update module", error);
-        }
-    };
+    // Removed handleUpdate as it's no longer needed in this component
 
     const handleToggleCredentialModule = (moduleId) => {
         setCredentialModules(prev => {
@@ -191,7 +183,7 @@ const CurriculumPage = () => {
                                                         title={credentialModules.has(item.module_id) ? 'Remove from credential requirements' : 'Add to credential requirements'}
                                                     >
                                                         {credentialModules.has(item.module_id) ? (
-                                                            <SolidStarIcon className="h-6 w-6 text-yellow-500" />
+                                                            <SolidStarIcon className="h-6 w-6" />
                                                         ) : (
                                                             <StarIcon className="h-6 w-6" />
                                                         )}
@@ -223,14 +215,6 @@ const CurriculumPage = () => {
                 addedModules={changedModules.added}
                 removedModules={changedModules.removed}
             />
-
-            {isEditModalOpen && (
-                <EditModuleModal
-                    module={selectedModule}
-                    onClose={() => setIsEditModalOpen(false)}
-                    onUpdate={handleUpdate}
-                />
-            )}
 
             {isDeleteModalOpen && (
                 <ConfirmDeleteModal

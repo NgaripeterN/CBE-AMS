@@ -47,8 +47,13 @@ const calculateFinalScore = async (student_id, module_id) => {
   // Process observations
   observations.forEach(observation => {
     if (observation.numericScore !== null && observation.maxScore !== null && observation.maxScore > 0) {
-      totalFormativeActualScore += observation.numericScore;
-      totalFormativeMaxScore += observation.maxScore;
+      if (observation.group === 'SUMMATIVE') {
+        totalSummativeActualScore += observation.numericScore;
+        totalSummativeMaxScore += observation.maxScore;
+      } else { // Default to formative if not specified or is FORMATIVE
+        totalFormativeActualScore += observation.numericScore;
+        totalFormativeMaxScore += observation.maxScore;
+      }
     }
   });
 
@@ -86,92 +91,12 @@ const calculateFinalScore = async (student_id, module_id) => {
   return finalModuleScore;
 };
 
-// This helper is no longer used in calculateFinalScore in its previous form
-// but is kept for potential other uses or a clearer separation of concerns if needed.
-const calculateAverage = (items, scoreField = 'totalScore') => {
-  if (items.length === 0) {
-    return 0;
-  }
-  const total = items.reduce((acc, item) => {
-    let score = 0;
-    if (item.grade) {
-      const gradeObj = typeof item.grade === 'string' ? JSON.parse(item.grade) : item.grade;
-      if (gradeObj && gradeObj.scores) {
-        score = Object.values(gradeObj.scores).reduce((sum, value) => sum + (Number(value) || 0), 0);
-      }
-    } else if (item[scoreField] !== undefined && item[scoreField] !== null) {
-      score = Number(item[scoreField]);
-    }
-    return acc + (score || 0);
-  }, 0);
-
-  // This average calculation assumes items are comparable or represent final percentages.
-  // For weighted averages based on total scores, a different aggregation is used in calculateFinalScore.
-  return total / items.length;
-};
-
-
-const getDescriptor = (score) => {
-  if (score >= 80) return 'EE';
-  if (score >= 50) return 'ME';
-  if (score >= 40) return 'AE';
-  return 'BE';
-};
-
-const issueCredential = async (student_id, module_id, type, score, descriptor) => {
-  const student = await prisma.student.findUnique({ where: { id: student_id }, include: { user: true } });
-  const module = await prisma.module.findUnique({ where: { module_id } });
-
-  const payload = {
-    issuer: {
-      name: 'CBE-AMS',
-      id: 'did:example:123',
-    },
-    recipient: {
-      saltedHashedStudentId: student.user.regNumber, // Using regNumber for PoC
-    },
-    credentialSubject: {
-      module_id: module.module_id,
-      moduleCode: module.moduleCode,
-      moduleTitle: module.title,
-      course_id: module.course_id,
-      moduleVersion: module.version,
-    },
-    result: {
-      descriptor,
-      score,
-    },
-    issuedOn: new Date().toISOString(),
-    metadata: {
-      schemaVersion: '1.0.0',
-      canonicalizationVersion: '1.0.0',
-      chainId: 'Sepolia',
-      contractAddress: '0xabc', // Placeholder
-    },
-  };
-
-  await prisma.microCredential.create({
-    data: {
-      student_id,
-      module_id,
-      descriptor,
-      score,
-      type,
-      payloadJson: payload,
-      status: 'ISSUED',
-      txHash: '0x123abc', // Placeholder
-      issuedAt: new Date(),
-    },
-  });
-};
-
 const autoGrade = (submissionData, rubric) => {
-  const rubricObject = JSON.parse(rubric);
-  const questionScores = rubricObject.questions.map((question, index) => {
+  const questionScores = rubric.questions.map((question, index) => {
     let score = 0;
     if (question.type === 'MCQ') {
       const submittedAnswer = submissionData.answers[index];
-      const correctAnswer = rubricObject.answers[index];
+      const correctAnswer = rubric.answers[index];
       if (correctAnswer !== null && correctAnswer !== undefined && submittedAnswer === correctAnswer.toString()) {
         score = question.marks;
       }
@@ -189,7 +114,5 @@ const autoGrade = (submissionData, rubric) => {
 
 module.exports = {
   calculateFinalScore,
-  getDescriptor,
-  issueCredential,
   autoGrade,
 };

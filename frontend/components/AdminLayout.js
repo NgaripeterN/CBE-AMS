@@ -24,6 +24,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: HomeIcon },
   { href: '/admin/users', label: 'User Management', icon: UsersIcon },
   { href: '/admin/courses', label: 'Courses', icon: BookOpenIcon },
+  { href: '/admin/competencies', label: 'Competency Management', icon: RectangleStackIcon },
   { href: '/admin/assign-lead', label: 'Assign Lead', icon: UserPlusIcon },
   { href: '/change-password', label: 'Change Password', icon: KeyIcon },
 ];

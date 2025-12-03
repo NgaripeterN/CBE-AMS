@@ -1028,32 +1028,27 @@ const assignLeadToCourse = async (req, res) => {
                 },
             });
 
-            // Assign lead to all offerings in the course
+            // Assign lead to all modules in the course
             const modules = await prisma.module.findMany({
                 where: {
                     course_id: course_id,
                 },
-                include: {
-                    offerings: true,
-                }
             });
 
             for (const module of modules) {
-                for (const offering of module.offerings) {
-                    await prisma.offeringAssignment.upsert({
-                        where: {
-                            offeringId_assessorId: {
-                                offeringId: offering.id,
-                                assessorId: assessor_id,
-                            },
-                        },
-                        update: {},
-                        create: {
-                            offeringId: offering.id,
+                await prisma.moduleAssignment.upsert({
+                    where: {
+                        moduleId_assessorId: {
+                            moduleId: module.module_id,
                             assessorId: assessor_id,
                         },
-                    });
-                }
+                    },
+                    update: {},
+                    create: {
+                        moduleId: module.module_id,
+                        assessorId: assessor_id,
+                    },
+                });
             }
 
             return newLead;

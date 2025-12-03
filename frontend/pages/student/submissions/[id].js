@@ -16,7 +16,39 @@ const SubmissionDetails = () => {
       if (id) {
         try {
           const { data } = await api.get(`/student/submission/${id}`);
-          setSubmission(data);
+          
+          let parsedSubmission = { ...data };
+
+          // Parse rubric if it's a string
+          if (typeof parsedSubmission.assessment.rubric === 'string') {
+            try {
+              parsedSubmission.assessment.rubric = JSON.parse(parsedSubmission.assessment.rubric);
+            } catch (e) {
+              console.error('Failed to parse rubric in submission details:', e);
+            }
+          }
+
+          // Parse grade if it's a string
+          if (parsedSubmission.grade && typeof parsedSubmission.grade === 'string') {
+            try {
+              parsedSubmission.grade = JSON.parse(parsedSubmission.grade);
+            } catch (e) {
+              console.error('Failed to parse grade in submission details:', e);
+            }
+          }
+
+          // Calculate total score and max score
+          if (parsedSubmission.grade && parsedSubmission.grade.questionScores && parsedSubmission.assessment.rubric && parsedSubmission.assessment.rubric.questions) {
+            const calculatedTotalScore = parsedSubmission.grade.questionScores.reduce((acc, qs) => acc + qs.score, 0);
+            const calculatedMaxScore = parsedSubmission.assessment.rubric.questions.reduce((acc, q) => acc + q.marks, 0);
+            parsedSubmission.totalScore = calculatedTotalScore;
+            parsedSubmission.maxScore = calculatedMaxScore;
+          } else {
+            parsedSubmission.totalScore = 0;
+            parsedSubmission.maxScore = 0;
+          }
+
+          setSubmission(parsedSubmission);
         } catch (err) {
           setError('Failed to fetch submission details.');
           console.error(err);

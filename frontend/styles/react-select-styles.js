@@ -34,6 +34,27 @@ const customStyles = {
     borderColor: 'hsl(var(--border))',
     zIndex: 9999,
   }),
+  menuList: (provided) => ({
+    ...provided,
+    maxHeight: '300px', // Increased for better visibility
+    overflowY: 'auto', 
+  }),
+  multiValue: (styles) => ({
+    ...styles,
+    backgroundColor: 'hsl(var(--primary-foreground))',
+  }),
+  multiValueLabel: (styles) => ({
+    ...styles,
+    color: 'hsl(var(--primary))',
+  }),
+  multiValueRemove: (styles) => ({
+    ...styles,
+    color: 'hsl(var(--primary))',
+    ':hover': {
+      backgroundColor: 'hsl(var(--destructive))',
+      color: 'hsl(var(--destructive-foreground))',
+    },
+  }),
 };
 
 export { customStyles };

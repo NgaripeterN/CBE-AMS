@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useDropzone } from 'react-dropzone';
 import api from '../../lib/api';
@@ -12,6 +12,21 @@ const ImportModulesPage = () => {
     const [files, setFiles] = useState([]);
     const [isImporting, setIsImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
+    const [courseCompetencies, setCourseCompetencies] = useState([]); // State to store course-specific competencies
+
+    useEffect(() => {
+      const fetchCourseCompetencies = async () => {
+        if (course_id) {
+          try {
+            const res = await api.get(`/lead/courses/${course_id}`);
+            setCourseCompetencies(res.data.competencies || []);
+          } catch (err) {
+            toast.error('Failed to fetch course competencies for reference.');
+          }
+        }
+      };
+      fetchCourseCompetencies();
+    }, [course_id]);
 
     const onDrop = useCallback(acceptedFiles => {
         setFiles(acceptedFiles.map(file => Object.assign(file, {
@@ -69,6 +84,12 @@ const ImportModulesPage = () => {
                         for (let j = 0; j < headers.length; j++) {
                             moduleData[headers[j]] = data[j];
                         }
+                        
+                        if (moduleData.competencyNames) {
+                          moduleData.competencyNames = moduleData.competencyNames.split(';').map(name => name.trim()).filter(name => name);
+                        } else {
+                          moduleData.competencyNames = [];
+                        }
                         modules.push(moduleData);
                     }
                 }
@@ -90,14 +111,14 @@ const ImportModulesPage = () => {
     };
     
     const downloadSample = () => {
-        const headers = ["moduleCode", "title", "description", "version", "status", "yearOfStudy", "semesterOfStudy"];
+        const headers = ["moduleCode", "title", "description", "version", "status", "yearOfStudy", "semesterOfStudy", "competencyNames"];
         const sampleData = [
-            ["CS101", "Introduction to Computer Science", "A foundational course on the principles of computing.", "1", "DRAFT", "1", "1"],
-            ["CS102", "Data Structures and Algorithms", "An in-depth look at data structures and algorithms.", "1", "DRAFT", "1", "2"]
+            ["CS101", "Introduction to Computer Science", "A foundational course on the principles of computing.", "1", "DRAFT", "1", "1", "Algorithmic Thinking;Programming Basics"],
+            ["CS102", "Data Structures and Algorithms", "An in-depth look at data structures and algorithms.", "1", "DRAFT", "1", "2", "Data Structures"],
         ];
 
-        let csvContent = "data:text/csv;charset=utf-8," 
-            + headers.join(",") + "\n" 
+        let csvContent = "data:text/csv;charset=utf-8,"
+            + headers.join(",") + "\n"
             + sampleData.map(e => e.join(",")).join("\n");
 
         const encodedUri = encodeURI(csvContent);
@@ -115,7 +136,7 @@ const ImportModulesPage = () => {
 
     return (
         <div className="relative container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="max-w-2xl mx-auto mt-8 w-full"> {/* Added mx-auto and mt-8 */}
+            <div className="max-w-2xl mx-auto mt-8 w-full"> 
                 <header className="mb-6">
                     <button onClick={() => router.back()} className="absolute top-0 left-0 mt-4 ml-4 p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center">
                         <ArrowLeftIcon className="h-5 w-5 mr-1" /> Back
@@ -147,12 +168,36 @@ const ImportModulesPage = () => {
                             </div>
                         )}
                         
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-4">
+                          <h4 className="font-semibold text-foreground mb-2">Available Competency Names for reference:</h4>
+                          <div className="bg-muted/50 p-3 rounded-md max-h-48 overflow-y-auto text-sm text-muted-foreground">
+                            {courseCompetencies.length > 0 ? (
+                              <ul>
+                                {courseCompetencies.map(comp => (
+                                  <li key={comp.id}>
+                                    <strong>{comp.name}</strong> (Category: {comp.category})
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p>No competencies associated with this course. Please contact an Admin to associate them.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex justify-between items-center">
                             <button
                                 onClick={downloadSample}
                                 className="text-sm text-blue-500 hover:underline"
                             >
                                 Download Sample CSV
+                            </button>
+                            <button
+                                onClick={handleImport}
+                                disabled={isImporting || files.length === 0}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg shadow-lg transform transition-all duration-500 ease-in-out hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isImporting ? 'Importing...' : 'Import Modules'}
                             </button>
                         </div>
                     </>
@@ -163,7 +208,7 @@ const ImportModulesPage = () => {
                         <h3 className="font-bold text-lg text-foreground">Import Summary</h3>
                         <p className="text-muted-foreground">Created: <span className="font-semibold text-green-500">{importResult.created}</span></p>
                         <p className="text-muted-foreground">Duplicates: <span className="font-semibold text-yellow-500">{importResult.duplicates}</span></p>
-                        {importResult.errors.length > 0 && (
+                        {importResult.errors && importResult.errors.length > 0 && (
                             <div>
                                 <h4 className="font-bold mt-2 text-red-500">Errors:</h4>
                                 <ul className="list-disc list-inside">
@@ -175,18 +220,6 @@ const ImportModulesPage = () => {
                         )}
                     </div>
                 )}
-
-                <div className="mt-8 flex items-center justify-end gap-4">
-                    {!importResult && (
-                        <button
-                            onClick={handleImport}
-                            disabled={isImporting || files.length === 0}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg transition-colors duration-300 shadow-lg hover:shadow-xl disabled:bg-primary/50"
-                        >
-                            {isImporting ? 'Importing...' : 'Import Modules'}
-                        </button>
-                    )}
-                </div>
             </div>
         </div>
     );

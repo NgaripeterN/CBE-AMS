@@ -64,7 +64,6 @@ const ModulePage = () => {
             <div key={assessment.assessment_id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex justify-between items-center">
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{assessment.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 mt-2">Created by: {assessment.createdBy.user.name}</p>
                 <p className="text-gray-600 dark:text-gray-300 mt-2">Deadline: {new Date(assessment.deadline).toLocaleString()}</p>
               </div>
               <div className="flex items-center">

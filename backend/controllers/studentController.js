@@ -10,6 +10,65 @@ const getStudentId = async (userId) => {
     return student ? student.id : null;
 };
 
+const getUpcomingAssessments = async (req, res) => {
+  const { userId } = req.user;
+  const studentId = await getStudentId(userId);
+  if (!studentId) {
+    return res.status(404).json({ error: 'Student profile not found' });
+  }
+
+  try {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { student_id: studentId },
+      select: { module_id: true, assessor_id: true },
+    });
+
+    if (enrollments.length === 0) {
+      return res.json([]);
+    }
+
+    const whereClauses = enrollments
+      .filter(e => e.assessor_id)
+      .map(e => ({
+        module_id: e.module_id,
+        createdByAssessorId: e.assessor_id,
+      }));
+
+    if (whereClauses.length === 0) {
+      return res.json([]);
+    }
+
+    const upcoming = await prisma.assessment.findMany({
+      where: {
+        AND: [
+          { OR: whereClauses },
+          {
+            deadline: { gte: new Date() },
+            submissions: {
+              none: { student_id: studentId },
+            },
+          },
+        ]
+      },
+      include: {
+        module: {
+          select: {
+            title: true,
+          },
+        },
+      },
+      orderBy: {
+        deadline: 'asc',
+      },
+      take: 4,
+    });
+    res.json(upcoming);
+  } catch (error) {
+    console.error('Error fetching upcoming assessments:', error);
+    res.status(500).json({ error: 'An error occurred while fetching upcoming assessments' });
+  }
+};
+
 const getDashboard = async (req, res) => {
   const { userId } = req.user;
   const studentId = await getStudentId(userId);
@@ -19,66 +78,49 @@ const getDashboard = async (req, res) => {
 
   try {
     const unreadNotificationsCount = await prisma.notification.count({
-      where: {
-        userId,
-        read: false,
-      },
+      where: { userId, read: false },
     });
 
     const microCredentialsCount = await prisma.microCredential.count({
-        where: {
-            student_id: studentId,
-        },
+        where: { student_id: studentId },
     });
 
     const courseCredentialsCount = await prisma.courseCredential.count({
-        where: {
-            student_id: studentId,
-        },
+        where: { student_id: studentId },
     });
 
     const credentialsEarned = microCredentialsCount + courseCredentialsCount;
 
-    const totalModulesEnrolled = await prisma.enrollment.count({
-        where: {
-            student_id: studentId,
-        },
+    const activeModulesEnrolled = await prisma.enrollment.count({
+        where: { student_id: studentId },
     });
 
     const enrollments = await prisma.enrollment.findMany({
       where: { student_id: studentId },
-      select: {
-        assignedAssessorId: true,
-        offering: {
-          select: {
-            moduleId: true,
-          },
-        },
-      },
+      select: { assessor_id: true, module_id: true },
     });
 
     const whereClauses = enrollments
-      .filter((e) => e.assignedAssessorId)
+      .filter((e) => e.assessor_id)
       .map((e) => ({
-        module_id: e.offering.moduleId,
-        createdById: e.assignedAssessorId,
+        module_id: e.module_id,
+        createdByAssessorId: e.assessor_id,
       }));
 
-    const pendingAssessmentsCount = whereClauses.length > 0 ? await prisma.assessment.count({
-      where: {
-        OR: whereClauses,
-        submissions: {
-          none: {
-            student_id: studentId,
-          },
-        },
-      },
-    }) : 0;
+    const pendingAssessmentsCount =
+      whereClauses.length > 0
+        ? await prisma.assessment.count({
+            where: {
+              OR: whereClauses,
+              submissions: { none: { student_id: studentId } },
+            },
+          })
+        : 0;
 
     res.json({
       unreadNotificationsCount,
       credentialsEarned,
-      totalModulesEnrolled,
+      activeModulesEnrolled,
       pendingAssessmentsCount,
     });
   } catch (error) {
@@ -116,20 +158,28 @@ const getAssessments = async (req, res) => {
   }
 
   try {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { student_id: studentId },
+      select: { module_id: true, assessor_id: true },
+    });
+
+    if (enrollments.length === 0) {
+      return res.json([]);
+    }
+    
+    const whereClauses = enrollments
+      .filter(e => e.assessor_id)
+      .map(e => ({
+        module_id: e.module_id,
+        createdByAssessorId: e.assessor_id,
+      }));
+
+    if (whereClauses.length === 0) {
+      return res.json([]);
+    }
+
     const assessments = await prisma.assessment.findMany({
-      where: {
-        module: {
-          offerings: {
-            some: {
-              enrollments: {
-                some: {
-                  student_id: studentId,
-                },
-              },
-            },
-          },
-        },
-      },
+      where: { OR: whereClauses },
       include: {
         module: true,
         submissions: {
@@ -143,7 +193,10 @@ const getAssessments = async (req, res) => {
 
     const formattedAssessments = assessments.map((assessment) => ({
       ...assessment,
-      submission: assessment.submissions.length > 0 ? assessment.submissions[0] : null,
+      submission:
+        assessment.submissions.length > 0
+          ? assessment.submissions[0]
+          : null,
     }));
 
     res.json(formattedAssessments);
@@ -170,6 +223,11 @@ const getAssessmentById = async (req, res) => {
           where: { student_id: studentId },
           orderBy: { createdAt: 'desc' },
         },
+        createdByAssessor: {
+          include: {
+            user: true,
+          }
+        }
       },
     });
 
@@ -180,9 +238,7 @@ const getAssessmentById = async (req, res) => {
     const enrollment = await prisma.enrollment.findFirst({
       where: {
         student_id: studentId,
-        offering: {
-          moduleId: assessment.module_id,
-        },
+        module_id: assessment.module_id,
       },
     });
 
@@ -190,7 +246,7 @@ const getAssessmentById = async (req, res) => {
       return res.status(403).json({ error: 'Student not enrolled in this module' });
     }
 
-    if (assessment.createdById !== enrollment.assignedAssessorId) {
+    if (assessment.createdByAssessorId !== enrollment.assessor_id) {
       return res.status(403).json({ error: 'You are not authorized to view this assessment' });
     }
 
@@ -206,9 +262,10 @@ const generateUploadSignature = async (req, res) => {
   try {
     const timestamp = Math.round(new Date().getTime() / 1000);
     const signature = cloudinary.utils.api_sign_request(
-      { timestamp: timestamp, folder: folder },
+      { timestamp, folder },
       process.env.CLOUDINARY_API_SECRET
     );
+
     res.json({ timestamp, signature });
   } catch (error) {
     console.error('Error generating Cloudinary signature:', error);
@@ -220,6 +277,7 @@ const submitAssessment = async (req, res) => {
   const { assessment_id } = req.params;
   const { userId } = req.user;
   const { submissionData } = req.body;
+
   const studentId = await getStudentId(userId);
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
@@ -236,10 +294,7 @@ const submitAssessment = async (req, res) => {
     }
 
     const existingSubmissions = await prisma.submission.count({
-      where: {
-        assessment_id,
-        student_id: studentId,
-      },
+      where: { assessment_id, student_id: studentId },
     });
 
     if (assessment.maxAttempts && existingSubmissions >= assessment.maxAttempts) {
@@ -256,14 +311,53 @@ const submitAssessment = async (req, res) => {
     });
 
     if (assessment.rubric) {
-      const rubric = JSON.parse(assessment.rubric);
-      const allQuestionsAreMcq = rubric.questions.every(q => q.type === 'MCQ');
-      const grade = scoring.autoGrade(submissionData, assessment.rubric);
+      const rubric = typeof assessment.rubric === 'string' 
+        ? JSON.parse(assessment.rubric) 
+        : assessment.rubric;
+
+      const allQuestionsAreMcq = rubric.questions.every(
+        (q) => q.type === 'MCQ'
+      );
+
+      const grade = scoring.autoGrade(submissionData, rubric);
+
+      // --- NEW COMPETENCY LOGIC ---
+      const evidenceToCreate = [];
+
+      rubric.questions.forEach((question, index) => {
+        // Check if the question is an MCQ, has competency IDs, and was answered correctly
+        if (question.type === 'MCQ' && question.competencyIds && question.competencyIds.length > 0) {
+          const submittedAnswer = submissionData.answers[index];
+          const correctAnswer = rubric.answers[index]; // Assuming rubric.answers holds correct answers
+
+          // Ensure correctAnswer is not null/undefined and matches the submitted answer
+          if (correctAnswer !== null && correctAnswer !== undefined && submittedAnswer == correctAnswer) { // Use loose equality for potential type coercion (string vs number)
+            // MCQ answered correctly, create evidence for associated competencies
+            question.competencyIds.forEach(competencyId => {
+              evidenceToCreate.push({
+                studentId: studentId,
+                competencyId: competencyId,
+                moduleId: assessment.module_id,
+                assessmentId: assessment.assessment_id,
+                status: 'SUCCESS', // Mark as SUCCESS if answered correctly
+              });
+            });
+          }
+        }
+      });
+
+      if (evidenceToCreate.length > 0) {
+        await prisma.studentCompetencyEvidence.createMany({
+          data: evidenceToCreate,
+          skipDuplicates: true, // Avoid creating duplicate evidence if already exists
+        });
+      }
+      // --- END NEW COMPETENCY LOGIC ---
 
       await prisma.submission.update({
         where: { submission_id: submission.submission_id },
         data: {
-          grade: grade,
+          grade,
           gradedAt: allQuestionsAreMcq ? new Date() : null,
         },
       });
@@ -274,7 +368,7 @@ const submitAssessment = async (req, res) => {
 
       await prisma.notification.create({
         data: {
-          userId: userId,
+          userId,
           message: notificationMessage,
           read: false,
         },
@@ -298,20 +392,69 @@ const getSubmissions = async (req, res) => {
   try {
     const submissions = await prisma.submission.findMany({
       where: { student_id: studentId },
-      include: { assessment: { include: { module: true } } },
+      include: {
+        assessment: { 
+          include: { 
+            module: {
+              include: {
+                offerings: {
+                  include: {
+                    semester: {
+                      include: {
+                        academicYear: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          } 
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
     const observations = await prisma.observation.findMany({
-        where: { student_id: studentId },
-        include: { module: true, assessor: { include: { user: true } } },
-        orderBy: { recordedAt: 'desc' },
+      where: {
+        students: {
+          some: {
+            studentId: studentId,
+          },
+        },
+      },
+      include: {
+        module: {
+          include: {
+            offerings: {
+              include: {
+                semester: {
+                  include: {
+                    academicYear: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        assessor: { include: { user: true } },
+      },
+      orderBy: { recordedAt: 'desc' },
     });
 
-    const formattedSubmissions = submissions.map(s => ({ ...s, type: 'submission' }));
-    const formattedObservations = observations.map(o => ({ ...o, type: 'observation', createdAt: o.recordedAt }));
+    const formattedSubmissions = submissions.map((s) => ({
+      ...s,
+      type: 'submission',
+    }));
 
-    const feed = [...formattedSubmissions, ...formattedObservations].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const formattedObservations = observations.map((o) => ({
+      ...o,
+      type: 'observation',
+      createdAt: o.recordedAt,
+    }));
+
+    const feed = [...formattedSubmissions, ...formattedObservations].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
 
     res.json(feed);
   } catch (error) {
@@ -324,6 +467,7 @@ const getSubmissionById = async (req, res) => {
   const { id } = req.params;
   const { userId } = req.user;
   const studentId = await getStudentId(userId);
+
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
   }
@@ -331,7 +475,9 @@ const getSubmissionById = async (req, res) => {
   try {
     const submission = await prisma.submission.findUnique({
       where: { submission_id: id },
-      include: { assessment: { include: { module: true } } },
+      include: {
+        assessment: { include: { module: true } },
+      },
     });
 
     if (!submission || submission.student_id !== studentId) {
@@ -347,11 +493,13 @@ const getSubmissionById = async (req, res) => {
 
 const completeOnboarding = async (req, res) => {
   const { userId } = req.user;
+
   try {
     await prisma.user.update({
       where: { user_id: userId },
       data: { onboardingCompleted: true },
     });
+
     res.status(200).json({ message: 'Onboarding completed successfully' });
   } catch (error) {
     console.error('Error completing onboarding:', error);
@@ -363,6 +511,7 @@ const getMyModules = async (req, res) => {
   const { userId } = req.user;
   const { page = 1, limit = 10 } = req.query;
   const offset = (page - 1) * limit;
+
   const studentId = await getStudentId(userId);
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
@@ -371,13 +520,7 @@ const getMyModules = async (req, res) => {
   try {
     const enrollments = await prisma.enrollment.findMany({
       where: { student_id: studentId },
-      include: {
-        offering: {
-          include: {
-            module: true,
-          },
-        },
-      },
+      include: { module: true },
       skip: parseInt(offset),
       take: parseInt(limit),
     });
@@ -386,7 +529,7 @@ const getMyModules = async (req, res) => {
       where: { student_id: studentId },
     });
 
-    const modules = enrollments.map((enrollment) => enrollment.offering.module);
+    const modules = enrollments.map((e) => e.module);
 
     res.json({
       modules,
@@ -395,14 +538,15 @@ const getMyModules = async (req, res) => {
       totalModules: totalEnrollments,
     });
   } catch (error) {
-    console.error('Error fetching student modules:', error);
-    res.status(500).json({ error: 'An error occurred while fetching student modules' });
+    console.error('Error fetching modules:', error);
+    res.status(500).json({ error: 'An error occurred while fetching modules' });
   }
 };
 
 const getModuleById = async (req, res) => {
   const { id } = req.params;
   const { userId } = req.user;
+
   const studentId = await getStudentId(userId);
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
@@ -412,19 +556,14 @@ const getModuleById = async (req, res) => {
     const enrollment = await prisma.enrollment.findFirst({
       where: {
         student_id: studentId,
-        offering: {
-          moduleId: id,
-        },
+        module_id: id,
       },
     });
 
     if (!enrollment) {
       return res.status(403).json({ error: 'Student not enrolled in this module' });
     }
-
-    console.log('studentId:', studentId);
-    console.log('assignedAssessorId:', enrollment.assignedAssessorId);
-
+    
     const module = await prisma.module.findUnique({
       where: { module_id: id },
     });
@@ -433,28 +572,28 @@ const getModuleById = async (req, res) => {
       return res.status(404).json({ error: 'Module not found' });
     }
 
-    let assessments = [];
-    if (enrollment.assignedAssessorId) {
-      assessments = await prisma.assessment.findMany({
-        where: {
-          module_id: id,
-          createdById: enrollment.assignedAssessorId,
+    const assessments = await prisma.assessment.findMany({
+      where: { 
+        module_id: id,
+        createdByAssessorId: enrollment.assessor_id,
+      },
+      include: {
+        submissions: {
+          where: { student_id: studentId },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
-        include: {
-          submissions: {
-            where: { student_id: studentId },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
+        createdByAssessor: {
+          include: {
+            user: true,
           },
         },
-      });
-    }
+      },
+    });
 
-    console.log('assessments:', assessments);
-
-    const formattedAssessments = assessments.map((assessment) => ({
-      ...assessment,
-      submission: assessment.submissions.length > 0 ? assessment.submissions[0] : null,
+    const formattedAssessments = assessments.map((a) => ({
+      ...a,
+      submission: a.submissions.length > 0 ? a.submissions[0] : null,
     }));
 
     res.json({ ...module, assessments: formattedAssessments });
@@ -467,6 +606,7 @@ const getModuleById = async (req, res) => {
 const getMyObservations = async (req, res) => {
   const { userId } = req.user;
   const studentId = await getStudentId(userId);
+
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
   }
@@ -476,6 +616,7 @@ const getMyObservations = async (req, res) => {
       where: { student_id: studentId },
       orderBy: { recordedAt: 'desc' },
     });
+
     res.json(observations);
   } catch (error) {
     console.error('Error fetching student observations:', error);
@@ -486,6 +627,7 @@ const getMyObservations = async (req, res) => {
 const getObservationById = async (req, res) => {
   const { id } = req.params;
   const { userId } = req.user;
+
   const studentId = await getStudentId(userId);
   if (!studentId) {
     return res.status(404).json({ error: 'Student profile not found' });
@@ -509,11 +651,13 @@ const getObservationById = async (req, res) => {
 
 const getAllNotifications = async (req, res) => {
   const { userId } = req.user;
+
   try {
     const notifications = await prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
+
     res.json(notifications);
   } catch (error) {
     console.error('Error fetching notifications:', error);
@@ -522,43 +666,37 @@ const getAllNotifications = async (req, res) => {
 };
 
 const markAllNotificationsAsRead = async (req, res) => {
-    const { userId } = req.user;
-    try {
-        await prisma.notification.updateMany({
-            where: {
-                userId,
-                read: false,
-            },
-            data: {
-                read: true,
-            },
-        });
-        res.json({ message: 'Notifications marked as read' });
-    } catch (error) {
-        console.error('Error marking notifications as read:', error);
-        res.status(500).json({ error: 'An error occurred while marking notifications as read' });
-    }
-}
+  const { userId } = req.user;
+
+  try {
+    await prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+
+    res.json({ message: 'Notifications marked as read' });
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+    res.status(500).json({ error: 'An error occurred while marking notifications as read' });
+  }
+};
 
 const markNotificationAsRead = async (req, res) => {
-    const { userId } = req.user;
-    const { id } = req.params;
-    try {
-        await prisma.notification.update({
-            where: {
-                id: id,
-                userId: userId,
-            },
-            data: {
-                read: true,
-            },
-        });
-        res.json({ message: 'Notification marked as read' });
-    } catch (error) {
-        console.error('Error marking notification as read:', error);
-        res.status(500).json({ error: 'An error occurred while marking notification as read' });
-    }
-}
+  const { userId } = req.user;
+  const { id } = req.params;
+
+  try {
+    await prisma.notification.update({
+      where: { id, userId },
+      data: { read: true },
+    });
+
+    res.json({ message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'An error occurred while marking notification as read' });
+  }
+};
 
 module.exports = {
   getDashboard,
@@ -577,4 +715,5 @@ module.exports = {
   getAllNotifications,
   markAllNotificationsAsRead,
   markNotificationAsRead,
+  getUpcomingAssessments,
 };

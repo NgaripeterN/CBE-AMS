@@ -1,8 +1,9 @@
 const prisma = require('../lib/prisma');
 const { calculateFinalScore } = require('../lib/scoring');
-const { issueCredential } = require('../lib/issuer');
+const { checkAndIssueCredentials } = require('../lib/credentialHelpers');
 const csv = require('csv-parser');
 const stream = require('stream');
+const { createNotification } = require('../lib/notifications');
 
 // @desc    Get all courses for an assessor
 // @route   GET /api/assessor/courses
@@ -32,25 +33,130 @@ const getCourses = async (req, res) => {
 // @access  Private/Assessor
 const getModules = async (req, res) => {
   const { userId } = req.user;
+  const { tab = 'active', page = 1, courseId = 'all' } = req.query;
+  const pageNum = parseInt(page, 10);
+  const limitNum = 10;
+  const offset = (pageNum - 1) * limitNum;
 
   try {
-    const moduleAssignments = await prisma.moduleAssignment.findMany({
-      where: {
-        assessor: {
-          userId: userId
-        }
-      },
+    const assessor = await prisma.assessor.findUnique({
+      where: { userId: userId },
+    });
+
+    if (!assessor) {
+      return res.status(404).json({ error: 'Assessor profile not found' });
+    }
+
+    const where = {
+      assessorId: assessor.id,
+      offering: {
+        module: {}
+      }
+    };
+
+    if (courseId !== 'all') {
+      where.offering.module.course_id = courseId;
+    }
+
+    if (tab === 'active') {
+      where.offering.module.status = 'PUBLISHED';
+    } else if (tab === 'completed') {
+      where.offering.module.status = 'DEPRECATED';
+    }
+
+    const totalAssignments = await prisma.offeringAssignment.count({ where });
+
+    const offeringAssignments = await prisma.offeringAssignment.findMany({
+      where,
+      skip: offset,
+      take: limitNum,
       include: {
-        module: true
+        offering: {
+          include: {
+            module: {
+              include: {
+                course: true,
+              }
+            }
+          }
+        }
       }
     });
 
-    const modules = moduleAssignments.map(assignment => assignment.module);
+    const modules = offeringAssignments.map(assignment => {
+      return {
+        ...assignment.offering.module,
+        offeringId: assignment.offering.id,
+      }
+    });
 
-    res.json(modules);
+    res.json({
+      modules,
+      totalPages: Math.ceil(totalAssignments / limitNum),
+      currentPage: pageNum,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'An error occurred while fetching modules' });
+  }
+};
+
+// @desc    Get all students for an assessor
+// @route   GET /api/assessor/students
+// @access  Private/Assessor
+const getStudents = async (req, res) => {
+  const { userId, leadForCourseId } = req.user;
+
+  try {
+    let students;
+    
+    if (leadForCourseId) {
+      // Lead assessor: get all students in the course
+      const modulesInCourse = await prisma.module.findMany({
+        where: { course_id: leadForCourseId },
+        select: { module_id: true },
+      });
+      const moduleIds = modulesInCourse.map(m => m.module_id);
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: { module_id: { in: moduleIds } },
+        include: {
+          student: { include: { user: true } },
+        },
+      });
+      students = enrollments.map(e => e.student);
+    } else {
+      // Regular assessor: get students from assigned modules
+      const assessor = await prisma.assessor.findUnique({ where: { userId } });
+      if (!assessor) {
+        return res.status(404).json({ error: 'Assessor profile not found' });
+      }
+      const moduleAssignments = await prisma.moduleAssignment.findMany({
+        where: { assessorId: assessor.id },
+        select: { moduleId: true },
+      });
+      const moduleIds = moduleAssignments.map(m => m.moduleId);
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: { 
+          module_id: { in: moduleIds },
+          assessor_id: assessor.id,
+        },
+        include: {
+          student: { include: { user: true } },
+        },
+      });
+      students = enrollments.map(e => e.student);
+    }
+
+    // Remove duplicate students and return only user data
+    const uniqueStudents = [...new Map(students.map(item => [item['id'], item])).values()];
+    const studentUsers = uniqueStudents.map(student => student.user);
+    
+    res.json(studentUsers);
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({ error: 'An error occurred while fetching students' });
   }
 };
 
@@ -255,7 +361,15 @@ const getSubmissionsForModule = async (req, res) => {
             },
             include: {
                 student: { include: { user: true } },
-                assessment: true,
+                assessment: {
+                    include: {
+                        module: {
+                            include: {
+                                competencies: true,
+                            }
+                        }
+                    }
+                },
             },
             orderBy: {
                 createdAt: 'desc',
@@ -265,16 +379,33 @@ const getSubmissionsForModule = async (req, res) => {
         const submissionsWithParsedData = submissions.map(submission => {
             let grade = null;
             try {
-                grade = submission.grade ? JSON.parse(submission.grade) : null;
+                if (typeof submission.grade === 'string') {
+                    grade = JSON.parse(submission.grade);
+                } else {
+                    grade = submission.grade; // It's already an object or null
+                }
             } catch (e) {
                 console.error('Error parsing grade JSON:', e);
+                grade = submission.grade; // Fallback to original value
+            }
+
+            let rubric = null;
+            try {
+                if (typeof submission.assessment.rubric === 'string') {
+                    rubric = JSON.parse(submission.assessment.rubric);
+                } else {
+                    rubric = submission.assessment.rubric;
+                }
+            } catch(e) {
+                console.error('Error parsing rubric JSON:', e);
+                rubric = submission.assessment.rubric; // Fallback
             }
 
             return {
                 ...submission,
                 assessment: {
                     ...submission.assessment,
-                    rubric: JSON.parse(submission.assessment.rubric),
+                    rubric: rubric,
                 },
                 grade,
             };
@@ -286,6 +417,37 @@ const getSubmissionsForModule = async (req, res) => {
         console.error('Error fetching submissions for module:', error);
         res.status(500).json({ error: 'An error occurred while fetching submissions' });
     }
+};
+
+const getOfferingByModule = async (req, res) => {
+  const { moduleId } = req.params;
+
+  try {
+    const module = await prisma.module.findUnique({
+      where: { module_id: moduleId },
+      include: {
+        course: true,
+        moduleAssignments: {
+          include: {
+            assessor: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!module) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    res.json(module);
+  } catch (error) {
+    console.error(`Error fetching offering for module ${moduleId}:`, error);
+    res.status(500).json({ error: 'An error occurred while fetching the module offering' });
+  }
 };
 
 // @desc    Get all submissions for an assessment
@@ -317,16 +479,33 @@ const getSubmissionsForAssessment = async (req, res) => {
         const submissionsWithParsedData = submissions.map(submission => {
             let grade = null;
             try {
-                grade = submission.grade ? JSON.parse(submission.grade) : null;
+                if (typeof submission.grade === 'string') {
+                    grade = JSON.parse(submission.grade);
+                } else {
+                    grade = submission.grade; // It's already an object or null
+                }
             } catch (e) {
                 console.error('Error parsing grade JSON:', e);
+                grade = submission.grade; // Fallback to original value
+            }
+
+            let rubric = null;
+            try {
+                if (typeof submission.assessment.rubric === 'string') {
+                    rubric = JSON.parse(submission.assessment.rubric);
+                } else {
+                    rubric = submission.assessment.rubric;
+                }
+            } catch(e) {
+                console.error('Error parsing rubric JSON:', e);
+                rubric = submission.assessment.rubric; // Fallback
             }
 
             return {
                 ...submission,
                 assessment: {
                     ...submission.assessment,
-                    rubric: JSON.parse(submission.assessment.rubric),
+                    rubric: rubric,
                 },
                 grade,
             };
@@ -344,11 +523,15 @@ const getSubmissionsForAssessment = async (req, res) => {
 // @access  Private/Assessor
 const createAssessment = async (req, res) => {
   const { module_id } = req.params;
-  const { title, submissionTypes, group, rubric, deadline, availableFrom, maxAttempts } = req.body;
+  const { title, description, submissionTypes, group, rubric, deadline, availableFrom, maxAttempts, duration, isFinal } = req.body;
   const { userId } = req.user;
 
   if (!title || !submissionTypes || !Array.isArray(submissionTypes) || submissionTypes.length === 0 || !deadline) {
     return res.status(400).json({ error: 'title, a non-empty array of submissionTypes, and deadline are required' });
+  }
+  
+  if (group === 'SUMMATIVE' && typeof isFinal !== 'boolean') {
+    return res.status(400).json({ error: 'For summative assessments, a finality choice is required.' });
   }
 
   if (isNaN(new Date(deadline).getTime())) {
@@ -368,16 +551,35 @@ const createAssessment = async (req, res) => {
     const assessment = await prisma.assessment.create({
       data: {
         module: { connect: { module_id } },
-        creator: { connect: { id: assessor.id } },
+        createdByAssessor: { connect: { id: assessor.id } },
         title,
+        description,
         submissionTypes,
         group,
         rubric,
         deadline: new Date(deadline),
         availableFrom: availableFrom ? new Date(availableFrom) : undefined,
         maxAttempts,
+        duration,
+        isFinal: group === 'SUMMATIVE' ? isFinal : false,
       },
     });
+
+    // Notify students enrolled in the module AND assigned to this assessor
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        module_id,
+        assessor_id: assessor.id, // Filter by the assessor who created the assessment
+      },
+      include: { student: { include: { user: true } } },
+    });
+
+    for (const enrollment of enrollments) {
+      await createNotification(
+        enrollment.student.user.user_id,
+        `A new assessment "${title}" has been created for your module.`
+      );
+    }
     res.status(201).json(assessment);
   } catch (error) {
     res.status(500).json({ error: 'An error occurred while creating the assessment' });
@@ -388,12 +590,12 @@ const createAssessment = async (req, res) => {
 // @route   POST /api/assessor/enroll-student
 // @access  Private/Assessor
 const enrollStudent = async (req, res) => {
-  const { module_id, student_email } = req.body;
+  const { offeringId, student_email } = req.body;
   const { userId } = req.user;
 
 
-  if (!module_id || !student_email) {
-    return res.status(400).json({ error: 'module_id and student_email are required' });
+  if (!offeringId || !student_email) {
+    return res.status(400).json({ error: 'offeringId and student_email are required' });
   }
 
   try {
@@ -411,20 +613,58 @@ const enrollStudent = async (req, res) => {
     if (!assessor) {
       return res.status(404).json({ error: 'Assessor profile not found' });
     }
-
-    const enrollment = await prisma.enrollment.create({
-      data: {
-        module: { connect: { module_id } },
-        assessor: { connect: { id: assessor.id } },
-        student: { connect: { id: student.id } },
-      },
+    
+    // Check if the assessor is assigned to this offering
+    const offeringAssignment = await prisma.offeringAssignment.findFirst({
+        where: {
+            offeringId: offeringId,
+            assessorId: assessor.id,
+        }
     });
-    res.status(201).json(enrollment);
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(400).json({ error: 'Enrollment already exists' });
+
+    if (!offeringAssignment) {
+        return res.status(403).json({ error: 'You are not assigned to this module offering.' });
     }
-    res.status(500).json({ error: 'An error occurred while enrolling the student' });
+
+    const offering = await prisma.offering.findUnique({
+        where: { id: offeringId }
+    });
+    if (!offering) {
+        return res.status(404).json({ error: 'Offering not found' });
+    }
+
+    const existingEnrollment = await prisma.enrollment.findUnique({
+        where: {
+            module_id_student_id: {
+                module_id: offering.moduleId,
+                student_id: student.id,
+            }
+        }
+    });
+
+    if (existingEnrollment) {
+        if (existingEnrollment.status === 'INACTIVE') {
+            const enrollment = await prisma.enrollment.update({
+                where: { id: existingEnrollment.id },
+                data: { status: 'ACTIVE', assessor_id: assessor.id },
+            });
+            return res.status(200).json({ message: 'Student re-enrolled successfully.', enrollment });
+        } else {
+            return res.status(400).json({ error: 'Student is already enrolled in this offering.' });
+        }
+    } else {
+        const enrollment = await prisma.enrollment.create({
+            data: {
+                module: { connect: { module_id: offering.moduleId } },
+                student: { connect: { id: student.id } },
+                assessor: { connect: { id: assessor.id } },
+            },
+        });
+        return res.status(201).json(enrollment);
+    }
+  } catch (error) {
+    console.error("Error enrolling student:", error);
+    res.status(500).json({ error: 'An error occurred while enrolling the student.' });
   }
 };
 
@@ -432,11 +672,11 @@ const enrollStudent = async (req, res) => {
 // @route   POST /api/assessor/record-observation
 // @access  Private/Assessor
 const recordObservation = async (req, res) => {
-  const { module_id, student_id, competencyTags, numericScore, maxScore, notes, media } = req.body;
+  const { module_id, studentIds, competencyIds, numericScore, maxScore, notes, media, group, isFinal } = req.body;
   const { userId } = req.user;
 
-  if (!module_id || !student_id) {
-    return res.status(400).json({ error: 'module_id and student_id are required' });
+  if (!module_id || !studentIds || studentIds.length === 0) {
+    return res.status(400).json({ error: 'module_id and at least one studentId are required' });
   }
 
   if (numericScore && maxScore && numericScore > maxScore) {
@@ -444,20 +684,65 @@ const recordObservation = async (req, res) => {
   }
 
   try {
+    const assessor = await prisma.assessor.findUnique({ where: { userId } });
+    if (!assessor) {
+      return res.status(404).json({ error: 'Assessor profile not found' });
+    }
+
     const observation = await prisma.observation.create({
       data: {
         module: { connect: { module_id } },
-        student: { connect: { id: student_id } },
-        assessor: { connect: { userId: userId } },
-        competencyTags,
+        assessor: { connect: { id: assessor.id } },
         numericScore,
         maxScore,
         notes,
         media,
+        group,
+        isFinal: group === 'SUMMATIVE' ? isFinal : false,
+        students: {
+          createMany: {
+            data: studentIds.map(sId => ({
+              studentId: sId,
+              assignedBy: userId,
+            })),
+          },
+        },
       },
+      include: {
+        module: {
+            include: {
+                course: true
+            }
+        },
+        students: {
+            include: {
+                student: true
+            }
+        }
+      }
     });
+
+    if (competencyIds && competencyIds.length > 0) {
+      for (const studentId of studentIds) {
+        await prisma.studentCompetencyEvidence.createMany({
+          data: competencyIds.map(cId => ({
+            studentId: studentId,
+            competencyId: cId,
+            moduleId: module_id,
+            observationId: observation.id,
+            status: 'SUCCESS',
+          })),
+          skipDuplicates: true,
+        });
+        if (group === 'SUMMATIVE') {
+          await checkAndIssueCredentials(studentId, module_id, isFinal || false);
+        }
+      }
+    }
+
     res.status(201).json(observation);
   } catch (error) {
+    console.error('Error recording observation:', error);
     res.status(500).json({ error: 'An error occurred while recording the observation' });
   }
 };
@@ -467,26 +752,18 @@ const recordObservation = async (req, res) => {
 // @access  Private/Assessor
 const gradeSubmission = async (req, res) => {
   const { submission_id } = req.params;
-  const { grade: newGrade } = req.body;
+  const { grade, shouldFinalizeCredential } = req.body;
 
-  if (!newGrade || !newGrade.questionScores) {
-    return res.status(400).json({ error: 'grade object with questionScores is required' });
+  if (typeof shouldFinalizeCredential !== 'boolean') {
+    return res.status(400).json({ error: 'A finality choice (shouldFinalizeCredential) is required.' });
   }
 
   try {
     const submission = await prisma.submission.findUnique({
       where: { submission_id },
-      include: { 
-        assessment: {
-          include: {
-            module: {
-              include: {
-                course: true,
-              },
-            },
-          },
-        },
-        student: true 
+      include: {
+        assessment: { include: { module: { include: { course: true } } } },
+        student: true,
       },
     });
 
@@ -494,85 +771,87 @@ const gradeSubmission = async (req, res) => {
       return res.status(404).json({ error: 'Submission not found' });
     }
 
-    const rubric = JSON.parse(submission.assessment.rubric);
-
-    // Validate new scores
-    for (const qs of newGrade.questionScores) {
-      const question = rubric.questions[qs.questionIndex];
-      if (!question) {
-        return res.status(400).json({ error: `Invalid question index: ${qs.questionIndex}` });
-      }
-      if (typeof qs.score !== 'number' || qs.score < 0) {
-        return res.status(400).json({ error: `Invalid score for question ${qs.questionIndex + 1}` });
-      }
-      if (qs.score > Number(question.marks)) {
-        return res.status(400).json({ error: `Score for question ${qs.questionIndex + 1} exceeds max marks of ${question.marks}` });
-      }
-    }
-
-    const existingGrade = submission.grade ? JSON.parse(submission.grade) : { questionScores: [], notes: '' };
-
-    const finalQuestionScoresMap = new Map();
-
-    // Start with existing scores (from auto-grading)
-    if (existingGrade && existingGrade.questionScores) {
-      existingGrade.questionScores.forEach(qs => {
-        finalQuestionScoresMap.set(qs.questionIndex, qs);
+    // Check if the assessment is summative and if there are ungraded formative assessments
+    if (submission.assessment.group === 'SUMMATIVE') {
+      const formativeAssessments = await prisma.assessment.findMany({
+        where: {
+          module_id: submission.assessment.module_id,
+          group: 'FORMATIVE',
+        },
+        select: {
+          assessment_id: true,
+        }
       });
+
+      if (formativeAssessments.length > 0) {
+        const formativeAssessmentIds = formativeAssessments.map(a => a.assessment_id);
+
+        const ungradedFormativeSubmission = await prisma.submission.findFirst({
+          where: {
+            student_id: submission.student_id,
+            assessment_id: { in: formativeAssessmentIds },
+            gradedAt: null,
+          },
+          include: {
+            assessment: {
+              select: {
+                title: true,
+              }
+            }
+          }
+        });
+
+        if (ungradedFormativeSubmission) {
+          return res.status(400).json({
+            error: `Please grade all formative assessments for this student first. The submission for "${ungradedFormativeSubmission.assessment.title}" is pending.`
+          });
+        }
+      }
     }
 
-    // Overwrite with new scores from assessor
-    newGrade.questionScores.forEach(qs => {
-      finalQuestionScoresMap.set(qs.questionIndex, qs);
-    });
-
-    const finalQuestionScores = Array.from(finalQuestionScoresMap.values());
-    const totalScore = finalQuestionScores.reduce((acc, qs) => acc + qs.score, 0);
-    
-    // An assessment is fully graded if there is a score for every question in the rubric
-    const allQuestionsGraded = rubric.questions.every((question, index) => {
-      return finalQuestionScores.some(s => s.questionIndex === index);
-    });
-
-    const finalGrade = {
-      notes: newGrade.notes || existingGrade.notes,
-      questionScores: finalQuestionScores,
-      totalScore: totalScore,
-    };
-
-    console.log('Final Grade Object:', JSON.stringify(finalGrade, null, 2));
+    if (grade.competencyEvidence) {
+      const evidenceToCreate = [];
+      for (const qIndex in grade.competencyEvidence) {
+        for (const cId in grade.competencyEvidence[qIndex]) {
+          if (grade.competencyEvidence[qIndex][cId]) {
+            evidenceToCreate.push({
+              studentId: submission.student_id,
+              competencyId: cId,
+              moduleId: submission.assessment.module_id,
+              assessmentId: submission.assessment_id,
+              status: 'SUCCESS',
+            });
+          }
+        }
+      }
+      if (evidenceToCreate.length > 0) {
+        await prisma.studentCompetencyEvidence.createMany({
+          data: evidenceToCreate,
+          skipDuplicates: true,
+        });
+      }
+    }
 
     const updatedSubmission = await prisma.submission.update({
       where: { submission_id },
       data: {
-        grade: JSON.stringify(finalGrade),
-        gradedAt: allQuestionsGraded ? new Date() : null,
+        grade,
+        gradedAt: new Date(),
       },
       include: {
-        assessment: {
-          include: {
-            module: {
-              include: {
-                course: true,
-              },
-            },
-          },
-        },
-        student: true
+        assessment: true,
+        student: { include: { user: true } },
       },
     });
 
-    if (allQuestionsGraded && updatedSubmission.assessment.group === 'SUMMATIVE') {
-      const finalScore = await calculateFinalScore(updatedSubmission.student.id, updatedSubmission.assessment.module_id);
-      const descriptor = getDescriptor(finalScore);
-      const course = updatedSubmission.assessment.module.course;
-      const minDescriptor = course.minDescriptor || 'ME';
+    // Notify the student about the graded submission
+    await createNotification(
+      updatedSubmission.student.user.user_id,
+      `Your submission for "${updatedSubmission.assessment.title}" has been graded.`
+    );
 
-      if (isPassing(descriptor, minDescriptor)) {
-        await issueCredential(updatedSubmission.student.id, updatedSubmission.assessment.module_id, 'MICRO_CREDENTIAL', finalScore, descriptor);
-      } else {
-        await issueCredential(updatedSubmission.student.id, updatedSubmission.assessment.module_id, 'STATEMENT_OF_ATTAINMENT', finalScore, descriptor);
-      }
+    if (updatedSubmission.assessment.group === 'SUMMATIVE') {
+      await checkAndIssueCredentials(updatedSubmission.student.id, updatedSubmission.assessment.module_id, shouldFinalizeCredential);
     }
 
     res.json(updatedSubmission);
@@ -626,13 +905,11 @@ const getRecentActivity = async (req, res) => {
 
   const recentSubmissions = await prisma.submission.findMany({
     where: {
-      assessment: {
-        module: {
-          enrollments: {
-            some: { assessor_id: assessor.id }
-          }
+      student: {
+        enrollments: {
+          some: { assessor_id: assessor.id }
         }
-      },
+      }
     },
     orderBy: { createdAt: 'desc' },
     take: 5,
@@ -651,18 +928,6 @@ const getRecentActivity = async (req, res) => {
   }));
 
   res.json(formattedSubmissions);
-};
-
-const getDescriptor = (score) => {
-  if (score >= 80) return 'EE';
-  if (score >= 50) return 'ME';
-  if (score >= 40) return 'AE';
-  return 'BE';
-};
-
-const isPassing = (descriptor, minDescriptor) => {
-  const descriptorRanks = { BE: 0, AE: 1, ME: 2, EE: 3 };
-  return descriptorRanks[descriptor] >= descriptorRanks[minDescriptor];
 };
 
 // @desc    Get all assessments for a module
@@ -725,11 +990,15 @@ const getAssessmentById = async (req, res) => {
 // @access  Private/Assessor
 const updateAssessment = async (req, res) => {
   const { id } = req.params;
-  const { title, submissionTypes, group, rubric, deadline, availableFrom, maxAttempts } = req.body;
+  const { title, description, submissionTypes, group, rubric, deadline, availableFrom, maxAttempts, duration, isFinal } = req.body;
   const { userId, leadForCourseId } = req.user;
 
   if (deadline && isNaN(new Date(deadline).getTime())) {
     return res.status(400).json({ error: 'Invalid deadline date' });
+  }
+  
+  if (group === 'SUMMATIVE' && typeof isFinal !== 'boolean') {
+    return res.status(400).json({ error: 'For summative assessments, a finality choice is required.' });
   }
 
   if (availableFrom && isNaN(new Date(availableFrom).getTime())) {
@@ -766,12 +1035,15 @@ const updateAssessment = async (req, res) => {
       where: { assessment_id: id },
       data: {
         title,
+        description,
         submissionTypes,
         group,
         rubric,
         deadline: deadline ? new Date(deadline) : undefined,
         availableFrom: availableFrom ? new Date(availableFrom) : undefined,
         maxAttempts,
+        duration,
+        isFinal: group === 'SUMMATIVE' ? isFinal : false,
       },
     });
     res.json(assessment);
@@ -856,13 +1128,31 @@ const bulkEnroll = async (req, res) => {
             if (studentUser) {
               const student = await prisma.student.findUnique({ where: { userId: studentUser.user_id } });
               if (student) {
-                await prisma.enrollment.create({
-                  data: {
-                    module: { connect: { module_id } },
-                    assessor: { connect: { id: assessor.id } },
-                    student: { connect: { id: student.id } },
-                  },
+                const existingEnrollment = await prisma.enrollment.findUnique({
+                  where: {
+                    module_id_student_id: {
+                      module_id: module_id,
+                      student_id: student.id,
+                    }
+                  }
                 });
+
+                if (existingEnrollment) {
+                  if (existingEnrollment.status === 'INACTIVE') {
+                    await prisma.enrollment.update({
+                      where: { id: existingEnrollment.id },
+                      data: { status: 'ACTIVE', assessor_id: assessor.id },
+                    });
+                  }
+                } else {
+                  await prisma.enrollment.create({
+                    data: {
+                      module: { connect: { module_id } },
+                      assessor: { connect: { id: assessor.id } },
+                      student: { connect: { id: student.id } },
+                    },
+                  });
+                }
               } else {
                 errors.push(`Student profile not found for email: ${student_email}`);
               }
@@ -885,14 +1175,51 @@ const bulkEnroll = async (req, res) => {
 // @access  Private/Assessor
 const unenrollStudent = async (req, res) => {
   const { enrollmentId } = req.params;
+  const { userId, role } = req.user;
 
   try {
-    await prisma.enrollment.delete({
+    const enrollment = await prisma.enrollment.findUnique({
       where: { id: enrollmentId },
+      include: { 
+        module: { 
+          include: { 
+            course: true 
+          } 
+        } 
+      },
     });
-    res.json({ message: 'Student unenrolled successfully' });
+
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Enrollment not found' });
+    }
+
+    const assessor = await prisma.assessor.findUnique({ where: { userId } });
+    if (!assessor) {
+      return res.status(404).json({ error: 'Assessor profile not found.' });
+    }
+
+    const isCourseLead = await prisma.courseAssignment.findFirst({
+      where: {
+        courseId: enrollment.module.course_id,
+        assessorId: assessor.id,
+        role: 'LEAD',
+      },
+    });
+
+    // An admin, the course lead, or the assessor assigned to the enrollment can unenroll.
+    if (role !== 'ADMIN' && !isCourseLead && enrollment.assessor_id !== assessor.id) {
+      return res.status(403).json({ error: 'You are not authorized to unenroll this student.' });
+    }
+
+    await prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: { status: 'INACTIVE' },
+    });
+
+    res.json({ message: 'Student unenrolled successfully. The enrollment is now inactive.' });
   } catch (error) {
-    res.status(500).json({ error: 'An error occurred while unenrolling the student' });
+    console.error('Error unenrolling student:', error);
+    res.status(500).json({ error: 'An error occurred while unenrolling the student.' });
   }
 };
 
@@ -932,14 +1259,27 @@ const getDashboardMetrics = async (req, res) => {
       return res.status(404).json({ error: 'Assessor profile not found' });
     }
 
+    const thirtyDaysAgo = new Date(new Date().setDate(new Date().getDate() - 30));
+
     const submissionsToGrade = await prisma.submission.count({
       where: {
         gradedAt: null,
-        assessment: {
-          module: {
-            enrollments: {
-              some: { assessor_id: assessor.id }
-            }
+        student: {
+          enrollments: {
+            some: { assessor_id: assessor.id }
+          }
+        }
+      }
+    });
+
+    const submissionsGradedLast30Days = await prisma.submission.count({
+      where: {
+        gradedAt: {
+          gte: thirtyDaysAgo,
+        },
+        student: {
+          enrollments: {
+            some: { assessor_id: assessor.id }
           }
         }
       }
@@ -956,28 +1296,209 @@ const getDashboardMetrics = async (req, res) => {
       }
     });
 
-    const activeModules = await prisma.moduleAssignment.count({
+    const activeModulesCount = await prisma.offeringAssignment.count({
       where: {
         assessorId: assessor.id,
-        module: {
-          status: 'PUBLISHED'
+        offering: {
+          module: {
+            status: 'PUBLISHED'
+          }
         }
       }
     });
 
-    res.json({ submissionsToGrade, upcomingDeadlines, activeModules });
+    res.json({ submissionsToGrade, submissionsGradedLast30Days, upcomingDeadlines, activeModules: activeModulesCount });
   } catch (error) {
     console.error('Error fetching dashboard metrics:', error);
     res.status(500).json({ error: 'An error occurred while fetching dashboard metrics' });
   }
 };
 
+// @desc    Get all observations for a module
+// @route   GET /api/assessor/modules/:moduleId/observations
+// @access  Private/Assessor
+const getObservationsForModule = async (req, res) => {
+    const { moduleId } = req.params;
+    const { userId } = req.user;
+
+    try {
+        const assessor = await prisma.assessor.findUnique({ where: { userId: userId } });
+        if (!assessor) {
+            return res.status(404).json({ error: 'Assessor profile not found' });
+        }
+
+        const observations = await prisma.observation.findMany({
+            where: {
+                module_id: moduleId,
+                assessor_id: assessor.id,
+            },
+            include: {
+                students: { // Include the StudentsOnObservations join table
+                    include: {
+                        student: { // Include the actual Student model
+                            include: {
+                                user: true // Include the User model for the student
+                            }
+                        }
+                    }
+                },
+                assessor: { include: { user: true } },
+                module: {
+                    include: {
+                        competencies: true,
+                    }
+                },
+                studentCompetencyEvidence: {
+                    include: {
+                        competency: true
+                    }
+                }
+            },
+            orderBy: {
+                recordedAt: 'desc',
+            }
+        });
+
+        res.json(observations);
+    } catch (error) {
+        console.error('Error fetching observations for module:', error);
+        res.status(500).json({ error: 'An error occurred while fetching observations' });
+    }
+};
+
+// @desc    Update an observation
+// @route   PUT /api/assessor/observations/:observationId
+// @access  Private/Assessor
+const updateObservation = async (req, res) => {
+  const { observationId } = req.params;
+  const { studentIds, competencyIds, numericScore, notes, group, isFinal } = req.body;
+  const { userId } = req.user;
+
+  try {
+    const assessor = await prisma.assessor.findUnique({ where: { userId } });
+    if (!assessor) {
+      return res.status(404).json({ error: 'Assessor profile not found' });
+    }
+
+    const observation = await prisma.observation.findUnique({
+      where: { id: observationId },
+      include: { students: true, module: true },
+    });
+
+    if (!observation) {
+      return res.status(404).json({ error: 'Observation not found' });
+    }
+
+    if (observation.assessor_id !== assessor.id) {
+      return res.status(403).json({ error: 'You are not authorized to update this observation' });
+    }
+
+    // Begin a transaction to ensure atomicity
+    const transactionOperations = [];
+
+    // --- 1. Update Students ---
+    const existingStudentIds = observation.students.map(s => s.studentId);
+    const studentsToConnect = (studentIds || []).filter(sId => !existingStudentIds.includes(sId));
+    const studentsToDisconnect = existingStudentIds.filter(sId => !(studentIds || []).includes(sId));
+
+    if (studentsToDisconnect.length > 0) {
+      // Also remove their competency evidence for this observation
+      transactionOperations.push(prisma.studentCompetencyEvidence.deleteMany({
+        where: {
+          observationId: observationId,
+          studentId: { in: studentsToDisconnect },
+        },
+      }));
+      transactionOperations.push(prisma.studentsOnObservations.deleteMany({
+        where: {
+          observationId: observationId,
+          studentId: { in: studentsToDisconnect },
+        },
+      }));
+    }
+
+    if (studentsToConnect.length > 0) {
+      transactionOperations.push(prisma.studentsOnObservations.createMany({
+        data: studentsToConnect.map(sId => ({
+          studentId: sId,
+          observationId: observationId,
+          assignedBy: userId,
+        })),
+        skipDuplicates: true,
+      }));
+    }
+
+    // --- 2. Update Competencies for remaining and new students ---
+    const finalStudentIds = (studentIds || existingStudentIds);
+
+    // First, clear all existing competency evidence for this observation
+    transactionOperations.push(prisma.studentCompetencyEvidence.deleteMany({
+      where: { observationId: observationId },
+    }));
+
+    // Then, create the new evidence for all relevant students
+    if (finalStudentIds.length > 0 && competencyIds && competencyIds.length > 0) {
+      const newEvidence = finalStudentIds.flatMap(studentId =>
+        competencyIds.map(cId => ({
+          studentId: studentId,
+          competencyId: cId,
+          moduleId: observation.module_id,
+          observationId: observationId,
+          status: 'SUCCESS',
+        }))
+      );
+      transactionOperations.push(prisma.studentCompetencyEvidence.createMany({
+        data: newEvidence,
+        skipDuplicates: true,
+      }));
+    }
+
+    // --- 3. Update Observation Details ---
+    transactionOperations.push(prisma.observation.update({
+      where: { id: observationId },
+      data: {
+        numericScore,
+        notes,
+        group,
+        isFinal: group === 'SUMMATIVE' ? isFinal : false,
+      },
+    }));
+
+    // Execute all operations in a single transaction
+    await prisma.$transaction(transactionOperations);
+
+    // --- 4. Post-update: Re-check credentials ---
+    if (group === 'SUMMATIVE') {
+      for (const studentId of finalStudentIds) {
+        await checkAndIssueCredentials(studentId, observation.module_id, isFinal || false);
+      }
+    }
+    
+    const updatedObservation = await prisma.observation.findUnique({
+      where: { id: observationId },
+      include: {
+        students: { include: { student: { include: { user: true } } } },
+        assessor: { include: { user: true } },
+        module: { include: { competencies: true, course: true } },
+        studentCompetencyEvidence: { include: { competency: true } }
+      }
+    })
+
+    res.json(updatedObservation);
+  } catch (error) {
+    console.error('Error updating observation:', error);
+    res.status(500).json({ error: 'An error occurred while updating the observation' });
+  }
+};
+
 module.exports = {
   getCourses,
   getModules,
+  getStudents,
   getCredentialTrackingData,
   getStudentProgressData,
   getSubmissionsForModule,
+  getOfferingByModule,
   getSubmissionsForAssessment,
   createAssessment,
   enrollStudent,
@@ -993,4 +1514,6 @@ module.exports = {
   unenrollStudent,
   getSubmissionMediaUrl,
   getDashboardMetrics,
+  getObservationsForModule,
+  updateObservation,
 };

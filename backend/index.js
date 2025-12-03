@@ -15,6 +15,7 @@ const verifyRoutes = require('./routes/verifyRoutes');
 const credentialRoutes = require('./routes/credentialRoutes');
 const unifiedCurriculumRoutes = require('./routes/unifiedCurriculum.js');
 const unifiedEnrollmentRoutes = require('./routes/unifiedEnrollment.js');
+const competencyRoutes = require('./routes/competencyRoutes');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api/verify', verifyRoutes);
 app.use('/api/credentials', credentialRoutes);
 app.use('/api/curriculum', unifiedCurriculumRoutes);
 app.use('/api/enrollments', unifiedEnrollmentRoutes);
+app.use('/api/competencies', competencyRoutes);
 
 const PORT = process.env.PORT || 5000;
 

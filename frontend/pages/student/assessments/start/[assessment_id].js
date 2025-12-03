@@ -8,17 +8,21 @@ import ErrorModal from '../../../../components/ErrorModal';
 import Toast from '../../../../components/Toast';
 import { format } from 'date-fns';
 import Timer from '../../../../components/Timer';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 const AssessmentSubmissionPage = () => {
   const router = useRouter();
   const { assessment_id } = router.query;
+  const { user } = useAuth();
   const [assessment, setAssessment] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadingProgress, setUploadingProgress] = useState(null);
+  const [uploadingProgress, setUploadingProgress] = useState({}); // Changed to object
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState({}); // New state for drag-and-drop
+  const [startTime, setStartTime] = useState(null);
   
   // State for Toast notification
   const [showToast, setShowToast] = useState(false);
@@ -51,8 +55,10 @@ const AssessmentSubmissionPage = () => {
 
     try {
       await submitAssessment(assessment_id, { submissionData: { answers: answersRef.current } });
-      localStorage.removeItem(`assessment_answers_${assessment_id}`);
-      localStorage.removeItem(`assessment_start_time_${assessment_id}`);
+      if (user) {
+        localStorage.removeItem(`assessment_answers_${assessment_id}_${user.user_id}`);
+        localStorage.removeItem(`assessment_start_time_${assessment_id}_${user.user_id}`);
+      }
       
       setToastMessage('Assessment submitted successfully!');
       setToastType('success');
@@ -60,7 +66,7 @@ const AssessmentSubmissionPage = () => {
 
       // Delay redirect to allow toast to be seen
       setTimeout(() => {
-        router.push('/student/submissions');
+        window.location.href = '/student/submissions';
       }, 2000); // Show toast for 2 seconds
 
     } catch (err) {
@@ -71,10 +77,10 @@ const AssessmentSubmissionPage = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [assessment_id, router]);
+  }, [assessment_id, user]);
 
   useEffect(() => {
-    if (assessment_id) {
+    if (assessment_id && user) {
       setIsLoading(true);
       getAssessmentById(assessment_id)
         .then(data => {
@@ -84,7 +90,18 @@ const AssessmentSubmissionPage = () => {
           };
           setAssessment(assessmentData);
 
-          const savedAnswers = localStorage.getItem(`assessment_answers_${assessment_id}`);
+          const startTimeKey = `assessment_start_time_${assessment_id}_${user.user_id}`;
+          const savedStartTime = localStorage.getItem(startTimeKey);
+          if (savedStartTime) {
+            setStartTime(Number(savedStartTime));
+          } else {
+            const now = Date.now();
+            localStorage.setItem(startTimeKey, now.toString());
+            setStartTime(now);
+          }
+
+          const answersKey = `assessment_answers_${assessment_id}_${user.user_id}`;
+          const savedAnswers = localStorage.getItem(answersKey);
           if (savedAnswers) {
             setAnswers(JSON.parse(savedAnswers));
           } else if (assessmentData.rubric && assessmentData.rubric.questions) {
@@ -104,14 +121,15 @@ const AssessmentSubmissionPage = () => {
           setIsLoading(false);
         });
     }
-  }, [assessment_id]);
+  }, [assessment_id, user]);
 
 
   useEffect(() => {
-    if (assessment_id && answers.length > 0) {
-      localStorage.setItem(`assessment_answers_${assessment_id}`, JSON.stringify(answers));
+    if (assessment_id && user && answers.length > 0) {
+      const answersKey = `assessment_answers_${assessment_id}_${user.user_id}`;
+      localStorage.setItem(answersKey, JSON.stringify(answers));
     }
-  }, [answers, assessment_id]);
+  }, [answers, assessment_id, user]);
 
   const handleInputChange = (index, value) => {
     const newAnswers = [...answers];
@@ -121,7 +139,7 @@ const AssessmentSubmissionPage = () => {
 
   const handleFileChange = async (index, file) => {
     if (!file) return;
-    setUploadingProgress(0);
+    setUploadingProgress(prev => ({ ...prev, [index]: 0 })); // Update for specific index
 
     try {
       const folder = `submissions/${assessment.module_id}/${assessment_id}`;
@@ -137,7 +155,7 @@ const AssessmentSubmissionPage = () => {
       const response = await axios.post(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/upload`, formData, {
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadingProgress(percentCompleted);
+          setUploadingProgress(prev => ({ ...prev, [index]: percentCompleted })); // Update for specific index
         },
       });
 
@@ -160,15 +178,40 @@ const AssessmentSubmissionPage = () => {
       console.error('File upload failed:', err);
       setError('File upload failed. Please try again.');
     } finally {
-      setUploadingProgress(null);
+      setUploadingProgress(prev => { // Clear progress for specific index
+        const newProgress = { ...prev };
+        delete newProgress[index];
+        return newProgress;
+      });
     }
   };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    setIsDragging(prev => ({ ...prev, [index]: true }));
+  };
+
+  const handleDragLeave = (e, index) => {
+    e.preventDefault();
+    setIsDragging(prev => ({ ...prev, [index]: false }));
+  };
+
+  const handleDrop = (e, index) => {
+    e.preventDefault();
+    setIsDragging(prev => ({ ...prev, [index]: false }));
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileChange(index, e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  };
+
 
   const goBack = () => {
     router.back();
   };
 
   const handleTimeUp = () => {
+    if (isSubmitting) return; // Prevent multiple submissions
     handleSubmit(null, true);
   };
 
@@ -176,7 +219,7 @@ const AssessmentSubmissionPage = () => {
   if (error && !isErrorModalOpen) return <div className="flex justify-center items-center min-h-screen"><p className="text-lg text-red-500">{error}</p></div>;
   if (!assessment) return <div className="flex justify-center items-center min-h-screen"><p className="text-lg">Assessment not found.</p></div>;
 
-  const { title, description, rubric, deadline, maxAttempts, submissions, createdBy } = assessment;
+  const { title, description, rubric, deadline, maxAttempts, submissions, createdByAssessor: createdBy } = assessment;
   const isEligible = new Date(deadline) > new Date() && submissions.length < maxAttempts;
   const questions = rubric.questions;
 
@@ -205,11 +248,12 @@ const AssessmentSubmissionPage = () => {
                     <ArrowLeftIcon className="h-5 w-5 mr-2" />
                     Back
                 </button>
-                {assessment.duration && (
-                <Timer 
-                    duration={assessment.duration} 
+                {assessment.duration && assessment.duration > 0 && (
+                <Timer
+                    duration={assessment.duration}
+                    startTime={startTime}
                     onTimeUp={handleTimeUp}
-                    isStarted={true} // Timer is always started on this page
+                    isStarted={!!startTime}
                 />
                 )}
             </header>
@@ -247,44 +291,67 @@ const AssessmentSubmissionPage = () => {
                                 ))}
                             </div>
                             )}
-                            {q.type === 'TEXT' && (
-                            <textarea
-                                rows="5"
-                                value={answers[index] || ''}
-                                onChange={(e) => handleInputChange(index, e.target.value)}
-                                className="w-full p-3 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Type your answer here..."
-                            ></textarea>
-                            )}
-                            {(q.type === 'FILE' || q.type === 'MEDIA') && (
-                            <div className="flex items-center space-x-4">
-                                <label className="flex items-center px-4 py-2 bg-white dark:bg-gray-700 text-blue-500 rounded-lg shadow-lg tracking-wide uppercase border border-blue-500 cursor-pointer hover:bg-blue-500 hover:text-white dark:hover:bg-blue-600">
-                                <FiUpload className="w-6 h-6 mr-2" />
-                                <span className="text-base leading-normal">Select a file</span>
+                            {(q.type === 'TEXT' || q.type === 'SHORT_ANSWER') && (
                                 <input
-                                    type="file"
-                                    onChange={(e) => handleFileChange(index, e.target.files[0])}
-                                    className="hidden"
+                                    type="text"
+                                    value={answers[index] || ''}
+                                    onChange={(e) => handleInputChange(index, e.target.value)}
+                                    className="input w-full p-3 border rounded-md bg-background border-border focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    placeholder="Type your answer here..."
                                 />
-                                </label>
-                                {answers[index] && (
-                                <div className="flex items-center space-x-2">
-                                    <span className="text-gray-600 dark:text-gray-400">{answers[index].fileName}</span>
-                                    <button
-                                    type="button"
-                                    onClick={() => handleInputChange(index, '')} // Clear the answer for this question
-                                    className="text-red-500 hover:text-red-700 focus:outline-none"
-                                    >
-                                    Remove
-                                    </button>
+                            )}
+                            {q.type === 'LONG_ANSWER' && (
+                                <textarea
+                                    value={answers[index] || ''}
+                                    onChange={(e) => handleInputChange(index, e.target.value)}
+                                    className="min-h-80 input w-full p-3 border rounded-md bg-background border-border focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    placeholder="Type your detailed answer here..."
+                                ></textarea>
+                            )}
+                            {(q.type === 'FILE' || q.type === 'MEDIA' || q.type === 'FILE_UPLOAD') && (
+                                <div
+                                  className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg transition-all duration-200 ease-in-out
+                                    ${isDragging[index] ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30'}`}
+                                  onDragOver={(e) => handleDragOver(e, index)}
+                                  onDragLeave={(e) => handleDragLeave(e, index)}
+                                  onDrop={(e) => handleDrop(e, index)}
+                                >
+                                  {answers[index] ? (
+                                    <div className="flex items-center space-x-3">
+                                      <FiFileText className="w-6 h-6 text-green-500" />
+                                      <span className="text-gray-700 dark:text-gray-300 font-medium">{answers[index].fileName}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleInputChange(index, null)} // Clear the answer for this question
+                                        className="text-red-500 hover:text-red-700 focus:outline-none"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <FiUpload className="w-10 h-10 text-gray-400 dark:text-gray-500 mb-3" />
+                                      <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                                        <span className="font-semibold">Click to upload</span> or drag and drop
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, GIF, PDF up to 10MB</p>
+                                      <input
+                                        type="file"
+                                        onChange={(e) => handleFileChange(index, e.target.files[0])}
+                                        className="hidden"
+                                        id={`file-upload-${index}`}
+                                      />
+                                      <label htmlFor={`file-upload-${index}`} className="mt-3 px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-sm tracking-wide uppercase cursor-pointer hover:bg-primary/90 transition-colors duration-200">
+                                        Select File
+                                      </label>
+                                    </>
+                                  )}
+                                  {uploadingProgress !== null && uploadingProgress[index] !== undefined && (
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-4">
+                                      <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadingProgress[index]}%` }}></div>
+                                    </div>
+                                  )}
                                 </div>
-                                )}
-                                {uploadingProgress !== null && (
-                                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadingProgress}%` }}></div>
-                                </div>
-                                )}
-                            </div>
                             )}
                         </div>
                         </div>

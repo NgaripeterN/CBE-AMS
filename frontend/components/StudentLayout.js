@@ -109,7 +109,7 @@ const StudentLayout = ({ children }) => {
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col overflow-auto">
-        <Header />
+        <Header showNotifications={true} />
         <div className="md:hidden flex justify-between items-center p-4 bg-card border-b border-border">
           <h1 className="text-xl font-bold text-foreground">Student Dashboard</h1>
           <button onClick={() => setSidebarOpen(!isSidebarCollapsed)} className="p-2 rounded-md text-muted-foreground hover:bg-muted">

@@ -19,6 +19,7 @@ router.get('/students', assessorController.getStudents);
 router.get('/credential-tracking', assessorController.getCredentialTrackingData);
 router.get('/student-progress', assessorController.getStudentProgressData);
 router.get('/modules/:moduleId/submissions', isModuleAssessor, assessorController.getSubmissionsForModule);
+router.get('/modules/:moduleId/observations', isModuleAssessor, assessorController.getObservationsForModule);
 router.get('/modules/:module_id/assessments', isModuleAssessor, assessorController.getAssessmentsForModule);
 router.get('/modules/:moduleId/offering', assessorController.getOfferingByModule);
 router.get('/assessments/:id', assessorController.getAssessmentById);
@@ -27,8 +28,9 @@ router.put('/assessments/:id', isModuleAssessor, assessorController.updateAssess
 router.delete('/assessments/:id', isModuleAssessor, assessorController.deleteAssessment);
 router.post('/enroll-student', isModuleAssessor, assessorController.enrollStudent);
 router.post('/bulk-enroll', upload.single('file'), isModuleAssessor, assessorController.bulkEnroll);
-router.delete('/enrollments/:enrollmentId', isEnrollmentAssessor, assessorController.unenrollStudent);
+router.delete('/enrollments/:enrollmentId', assessorController.unenrollStudent);
 router.post('/record-observation', isModuleAssessor, assessorController.recordObservation);
+router.put('/observations/:observationId', assessorController.updateObservation);
 router.post('/grade-submission/:submission_id', assessorController.gradeSubmission);
 router.get('/dashboard/recent-activity', assessorController.getRecentActivity);
 router.get('/dashboard/random-submission', assessorController.getRandomSubmission);

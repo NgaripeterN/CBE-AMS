@@ -4,53 +4,48 @@ import { FiAward, FiBookOpen, FiClock, FiCalendar, FiExternalLink } from 'react-
 import StudentCalendar from '../../components/Student/Dashboard/Calendar';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import useAuth from '../../hooks/useAuth';
 
 const StudentDashboard = () => {
+  const { user, loading } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
   const [error, setError] = useState('');
-  const [allAssessments, setAllAssessments] = useState([]);
-  const [upcomingUndoneAssessments, setUpcomingUndoneAssessments] = useState([]);
+  const [upcomingAssessments, setUpcomingAssessments] = useState([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [dashboardRes, assessmentsRes] = await Promise.all([
+        const [dashboardRes, upcomingRes] = await Promise.all([
           api.get('/student/dashboard'),
-          api.get('/student/assessments')
+          api.get('/student/assessments/upcoming')
         ]);
         setDashboardData(dashboardRes.data);
-        setAllAssessments(assessmentsRes.data);
-
-        const undoneUpcoming = assessmentsRes.data
-          .filter(assessment => {
-            const deadline = new Date(assessment.deadline);
-            const isPending = !assessment.submission || !assessment.submission.grade;
-            return deadline >= new Date() && isPending;
-          })
-          .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
-          .slice(0, 3); // Get the first 3
-        setUpcomingUndoneAssessments(undoneUpcoming);
+        setUpcomingAssessments(upcomingRes.data);
 
       } catch (err) {
-        setError('Failed to fetch dashboard data or assessments.');
+        setError('Failed to fetch dashboard data.');
       }
     };
     fetchDashboardData();
   }, []);
+
+  if (loading) {
+    return <p>Loading user data...</p>;
+  }
 
   if (error) {
     return <p className="text-destructive">{error}</p>;
   }
 
   if (!dashboardData) {
-    return <p>Loading...</p>;
+    return <p>Loading dashboard data...</p>;
   }
 
   const { credentialsEarned, activeModulesEnrolled, pendingAssessmentsCount } = dashboardData;
 
   return (
     <div className="container mx-auto px-4 py-4">
-      <h1 className="text-3xl font-bold mb-4 text-foreground">Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-4 text-foreground">Welcome, {user?.name || 'Student'}!</h1>
 
       {/* Key Metrics Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -81,9 +76,9 @@ const StudentDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           <h2 className="text-xl font-bold mb-3 text-foreground">Your Next Tasks</h2>
-          {upcomingUndoneAssessments.length > 0 ? (
+          {upcomingAssessments.length > 0 ? (
             <div className="space-y-3">
-              {upcomingUndoneAssessments.map(assessment => (
+              {upcomingAssessments.map(assessment => (
                 <div key={assessment.assessment_id} className="bg-card p-4 rounded-lg shadow-md border border-border">
                   <Link href={`/student/assessments/${assessment.assessment_id}`} passHref legacyBehavior>
                     <a className="flex justify-between items-center group">
