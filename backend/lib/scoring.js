@@ -11,7 +11,16 @@ const calculateFinalScore = async (student_id, module_id) => {
     where: { student_id, assessment: { module_id } },
     include: { assessment: true } // Include assessment to get rubric
   });
-  const observations = await prisma.observation.findMany({ where: { student_id, module_id } });
+  const observations = await prisma.observation.findMany({
+    where: {
+      students: {
+        some: {
+          studentId: student_id,
+        },
+      },
+      module_id,
+    },
+  });
 
   let totalFormativeActualScore = 0;
   let totalFormativeMaxScore = 0;

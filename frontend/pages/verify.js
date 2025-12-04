@@ -21,11 +21,11 @@ const VerificationResult = ({ result }) => {
                 <h3 className="text-xl font-semibold border-b pb-2 border-border">Credential Details</h3>
                 <p><strong>Subject:</strong> {payload.credentialSubject?.name || 'Not available'}</p>
                 <p><strong>Email:</strong> {payload.recipient?.identity || 'Not available'}</p>
-                <p><strong>Registration Number:</strong> {payload.credentialSubject?.regNumber || 'Not available'}</p>
+                <p><strong>Registration Number:</strong> {payload.credentialSubject?.registrationNumber || 'Not available'}</p>
                 <p><strong>Title:</strong> {payload.badge?.name || 'Not available'}</p>
                 <p><strong>Description:</strong> {payload.badge?.description || 'Not available'}</p>
                 <p><strong>Issued By:</strong> {payload.badge?.issuer?.name || 'Not available'}</p>
-                <p><strong>Issued On:</strong> {payload.issuedOn ? new Date(payload.issuedOn).toLocaleDateString() : 'Not available'}</p>
+                <p><strong>Issued On:</strong> {payload.issuanceDate ? new Date(payload.issuanceDate).toLocaleDateString() : 'Not available'}</p>
             </div>
 
             {isValid && (

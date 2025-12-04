@@ -1,11 +1,13 @@
 const prisma = require('./prisma');
 const Bull = require('bull');
+const { v4: uuidv4 } = require('uuid'); // Import uuidv4 for payload generation
 
-const credentialIssuanceQueue = new Bull('credential-issuance', { redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT } });
+const credentialIssuanceQueue = new Bull('credential-issuance', { redis: { host: process.env.REDIS_HOST, port: parseInt(process.env.REDIS_PORT, 10) } });
 
 const stringify = require('json-stable-stringify');
 const { ethers } = require('ethers');
-const crypto = require('crypto');
+const { buildCredentialPayload } = require('./credentialBuilder'); // Import buildCredentialPayload
+const { createNotification } = require('./notifications'); // Import createNotification
 
 const contractAbi = [
     {
@@ -176,7 +178,7 @@ const getDescriptor = (score) => {
 };
 
 
-async function checkAndIssueCourseCredential(student_id, course_id) {
+async function checkAndIssueCourseCredential(student_id, course_id) { // This function is called from credentialHelpers
   console.log(`Checking course completion for student ${student_id} in course ${course_id}`);
 
   const course = await prisma.course.findUnique({
@@ -200,7 +202,11 @@ async function checkAndIssueCourseCredential(student_id, course_id) {
   }
 
   const requiredModules = course.modules.map(m => m.module_id);
-  const studentCredentials = student.microCredentials;
+  const studentCredentials = await prisma.microCredential.findMany({ // Re-fetch to ensure payloadJson is available
+      where: { student_id, module_id: { in: requiredModules } },
+      include: { module: true },
+  });
+
 
   const earnedModuleIds = new Set();
   const evidenceMicroCredentialIds = [];
@@ -222,40 +228,21 @@ async function checkAndIssueCourseCredential(student_id, course_id) {
     const averageScore = totalScore / requiredModules.length;
     const courseDescriptor = getDescriptor(averageScore);
 
-    const payload = {
-      id: `urn:uuid:${crypto.randomUUID()}`,
-      type: 'Assertion',
-      credentialSubject: {
-        name: student.user.name,
-        type: 'Person',
-        id: `urn:uuid:${student.user.user_id}`,
-        regNumber: student.user.regNumber,
-      },
-      recipient: {
-        type: 'email',
-        identity: student.user.email,
-        hashed: false,
-      },
-      issuedOn: new Date().toISOString(),
-      badge: {
-        type: 'BadgeClass',
-        id: `urn:uuid:${course.course_id}`,
-        name: course.name,
-        description: course.description,
-        issuer: {
-          type: 'Profile',
-          id: process.env.ISSUER_ID || 'did:example:123',
-          name: 'CBE-AMS',
-        },
-        criteria: {
-          narrative: `Awarded for completing all required modules in the course "${course.name}".`,
-        },
-        result: {
-          descriptor: courseDescriptor,
-          score: averageScore,
-        },
-      },
-    };
+    // Aggregate demonstrated competencies from the micro-credentials that contributed to this course credential
+    const allCourseDemonstratedCompetencies = studentCredentials.flatMap(mc =>
+        mc.payloadJson?.credentialSubject?.demonstratedCompetencies || []
+    );
+    const uniqueCourseCompetencies = Array.from(new Map(allCourseDemonstratedCompetencies.map(c => [c.id, c])).values());
+
+    const payload = buildCredentialPayload({
+        student,
+        course,
+        type: 'COURSE_CREDENTIAL',
+        score: averageScore, // Use averageScore for course
+        descriptor: courseDescriptor, // Use courseDescriptor for course
+        demonstratedCompetencies: uniqueCourseCompetencies,
+        evidenceModuleIds: requiredModules,
+    });
 
     const canonicalizedPayload = stringify(payload);
     const hash = ethers.keccak256(ethers.toUtf8Bytes(canonicalizedPayload));
@@ -296,7 +283,7 @@ async function checkAndIssueCourseCredential(student_id, course_id) {
 
 
 credentialIssuanceQueue.process(async (job) => {
-  const { student_id, module_id, type, score, descriptor } = job.data;
+  const { student_id, module_id, course_id, type, score, descriptor, demonstratedCompetencies, evidenceModuleIds } = job.data;
 
   try {
     const student = await prisma.student.findUnique({
@@ -304,92 +291,131 @@ credentialIssuanceQueue.process(async (job) => {
       include: { user: true },
     });
 
-    const module = await prisma.module.findUnique({
-      where: { module_id },
-      include: { course: true },
-    });
+    let payload;
+    let newCredential;
+    let notificationMessage;
 
-    const payload = {
-      id: `urn:uuid:${crypto.randomUUID()}`,
-      type: 'Assertion',
-      credentialSubject: {
-        name: student.user.name,
-        type: 'Person',
-        id: `urn:uuid:${student.user.user_id}`,
-        regNumber: student.user.regNumber,
-      },
-      recipient: {
-        type: 'email',
-        identity: student.user.email,
-        hashed: false,
-      },
-      issuedOn: new Date().toISOString(),
-      badge: {
-        type: 'BadgeClass',
-        id: `urn:uuid:${crypto.randomUUID()}`,
-        name: module.title,
-        description: module.description,
-        issuer: {
-          type: 'Profile',
-          id: process.env.ISSUER_ID || 'did:example:123',
-          name: 'CBE-AMS',
-        },
-        criteria: {
-          narrative: `Awarded for completing the module "${module.title}" with a descriptor of ${descriptor}.`,
-        },
-        result: {
-          descriptor,
-          score,
-        },
-      },
-    };
+    if (type === 'MICRO_CREDENTIAL') {
+        const module = await prisma.module.findUnique({
+            where: { module_id },
+            include: { course: true },
+        });
+        if (!module) throw new Error('Module not found for MicroCredential issuance');
 
-    const canonicalizedPayload = stringify(payload);
-    const hash = ethers.keccak256(ethers.toUtf8Bytes(canonicalizedPayload));
+        payload = buildCredentialPayload({
+            student,
+            module,
+            type: 'MICRO_CREDENTIAL',
+            score,
+            descriptor,
+            demonstratedCompetencies,
+        });
 
-    const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
-    const wallet = new ethers.Wallet(process.env.ISSUER_PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractAbi, wallet);
+        const canonicalizedPayload = stringify(payload);
+        const hash = ethers.keccak256(ethers.toUtf8Bytes(canonicalizedPayload));
 
-    const tx = await contract.issueCredential(hash, payload.id);
-    await tx.wait();
+        const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
+        const wallet = new ethers.Wallet(process.env.ISSUER_PRIVATE_KEY, provider);
+        const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractAbi, wallet);
 
-    const newMicroCredential = await prisma.microCredential.create({
-      data: {
-        student_id,
-        module_id,
-        type,
-        score,
-        descriptor,
-        issuedAt: new Date(),
-        payloadJson: payload,
-        txHash: tx.hash,
-        status: 'ISSUED',
-      },
-    });
+        const tx = await contract.issueCredential(hash, payload.id);
+        await tx.wait();
+
+        newCredential = await prisma.microCredential.update({
+            where: {
+                student_id_module_id: {
+                    student_id,
+                    module_id,
+                }
+            },
+            data: {
+                type,
+                score,
+                descriptor,
+                issuedAt: new Date(),
+                payloadJson: payload,
+                txHash: tx.hash,
+                status: 'ISSUED',
+            },
+        });
+        notificationMessage = `Congratulations! You've been issued a new credential for "${module.title}".`;
+
+        // After issuing micro-credential, check if course credential can be issued
+        if (newCredential) {
+            await checkAndIssueCourseCredential(student_id, module.course_id);
+        }
+
+    } else if (type === 'COURSE_CREDENTIAL') {
+        const course = await prisma.course.findUnique({
+            where: { course_id },
+            include: { modules: true },
+        });
+        if (!course) throw new Error('Course not found for CourseCredential issuance');
+
+        payload = buildCredentialPayload({
+            student,
+            course,
+            type: 'COURSE_CREDENTIAL',
+            score, // Score here would be the average score calculated in checkAndIssueCourseCredential
+            descriptor,
+            demonstratedCompetencies, // Aggregated competencies
+            evidenceModuleIds,
+        });
+
+        const canonicalizedPayload = stringify(payload);
+        const hash = ethers.keccak256(ethers.toUtf8Bytes(canonicalizedPayload));
+
+        const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
+        const wallet = new ethers.Wallet(process.env.ISSUER_PRIVATE_KEY, provider);
+        const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractAbi, wallet);
+
+        const tx = await contract.issueCredential(hash, payload.id);
+        await tx.wait();
+
+        newCredential = await prisma.courseCredential.update({
+            where: {
+                student_id_course_id: {
+                    student_id,
+                    course_id,
+                }
+            },
+            data: {
+                descriptor,
+                evidenceModuleIds,
+                issuedAt: new Date(),
+                payloadJson: payload,
+                txHash: tx.hash,
+                status: 'ISSUED',
+            },
+        });
+        notificationMessage = `Congratulations! You've earned the course credential for "${course.name}".`;
+
+    } else {
+        throw new Error(`Unknown credential type: ${type}`);
+    }
 
     await prisma.notification.create({
         data: {
             userId: student.userId,
-            message: `Congratulations! You've been issued a new credential for "${module.title}".`,
+            message: notificationMessage,
         },
     });
 
-    if (newMicroCredential) {
-      await checkAndIssueCourseCredential(student_id, module.course_id);
-    }
-
   } catch (error) {
     console.error('Error processing credential issuance job:', error);
-    // Optionally, you can retry the job or move it to a failed queue
     throw error;
   }
 });
 
-const issueCredential = async (student_id, module_id, type, score, descriptor) => {
-  await credentialIssuanceQueue.add({ student_id, module_id, type, score, descriptor });
+const issueCredential = async (student_id, module_id, type, score, descriptor, demonstratedCompetencies) => {
+  await credentialIssuanceQueue.add({ student_id, module_id, type, score, descriptor, demonstratedCompetencies });
+};
+
+const issueCourseCredential = async (student_id, course_id, descriptor, demonstratedCompetencies, evidenceModuleIds) => {
+    await credentialIssuanceQueue.add({ student_id, course_id, descriptor, demonstratedCompetencies, evidenceModuleIds, type: 'COURSE_CREDENTIAL' });
 };
 
 module.exports = {
   issueCredential,
+  issueCourseCredential,
 };

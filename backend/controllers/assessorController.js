@@ -4,6 +4,7 @@ const { checkAndIssueCredentials } = require('../lib/credentialHelpers');
 const csv = require('csv-parser');
 const stream = require('stream');
 const { createNotification } = require('../lib/notifications');
+const stringify = require('json-stable-stringify');
 
 // @desc    Get all courses for an assessor
 // @route   GET /api/assessor/courses
@@ -304,7 +305,11 @@ const getStudentProgressData = async (req, res) => {
 
         const observations = await prisma.observation.findMany({
           where: {
-            student_id: student.id,
+            students: {
+              some: {
+                studentId: student.id,
+              },
+            },
             module_id: { in: moduleIds }
           },
           include: { module: true },
@@ -771,41 +776,34 @@ const gradeSubmission = async (req, res) => {
       return res.status(404).json({ error: 'Submission not found' });
     }
 
-    // Check if the assessment is summative and if there are ungraded formative assessments
+    // Only check for ungraded formative assessments if the current one is SUMMATIVE
     if (submission.assessment.group === 'SUMMATIVE') {
-      const formativeAssessments = await prisma.assessment.findMany({
+      const ungradedFormativeSubmissions = await prisma.submission.findMany({
         where: {
-          module_id: submission.assessment.module_id,
-          group: 'FORMATIVE',
+          student_id: submission.student_id,
+          assessment: {
+            module_id: submission.assessment.module_id,
+            group: 'FORMATIVE',
+          },
+          gradedAt: null,
+          NOT: {
+            submission_id: submission.submission_id,
+          },
         },
-        select: {
-          assessment_id: true,
-        }
+        include: {
+          assessment: {
+            select: {
+              title: true,
+            },
+          },
+        },
       });
 
-      if (formativeAssessments.length > 0) {
-        const formativeAssessmentIds = formativeAssessments.map(a => a.assessment_id);
-
-        const ungradedFormativeSubmission = await prisma.submission.findFirst({
-          where: {
-            student_id: submission.student_id,
-            assessment_id: { in: formativeAssessmentIds },
-            gradedAt: null,
-          },
-          include: {
-            assessment: {
-              select: {
-                title: true,
-              }
-            }
-          }
+      if (ungradedFormativeSubmissions.length > 0) {
+        const submissionTitles = ungradedFormativeSubmissions.map(s => `"${s.assessment.title}"`).join(', ');
+        return res.status(400).json({
+          error: `Please grade all formative assessments for this student first. The following submissions are pending: ${submissionTitles}.`,
         });
-
-        if (ungradedFormativeSubmission) {
-          return res.status(400).json({
-            error: `Please grade all formative assessments for this student first. The submission for "${ungradedFormativeSubmission.assessment.title}" is pending.`
-          });
-        }
       }
     }
 
@@ -948,7 +946,7 @@ const getAssessmentsForModule = async (req, res) => {
     if (leadForCourseId !== module.course_id) {
       const assessor = await prisma.assessor.findUnique({ where: { userId } });
       if (assessor) {
-        whereClause.createdBy = assessor.id;
+        whereClause.createdByAssessorId = assessor.id;
       }
     }
 
@@ -993,17 +991,7 @@ const updateAssessment = async (req, res) => {
   const { title, description, submissionTypes, group, rubric, deadline, availableFrom, maxAttempts, duration, isFinal } = req.body;
   const { userId, leadForCourseId } = req.user;
 
-  if (deadline && isNaN(new Date(deadline).getTime())) {
-    return res.status(400).json({ error: 'Invalid deadline date' });
-  }
-  
-  if (group === 'SUMMATIVE' && typeof isFinal !== 'boolean') {
-    return res.status(400).json({ error: 'For summative assessments, a finality choice is required.' });
-  }
-
-  if (availableFrom && isNaN(new Date(availableFrom).getTime())) {
-    return res.status(400).json({ error: 'Invalid availableFrom date' });
-  }
+  console.log('Request Body:', req.body);
 
   try {
     const assessor = await prisma.assessor.findUnique({ where: { userId } });
@@ -1020,7 +1008,7 @@ const updateAssessment = async (req, res) => {
         return res.status(404).json({ error: 'Assessment not found' });
     }
 
-    const isCreator = assessmentToUpdate.createdBy === assessor.id;
+    const isCreator = assessmentToUpdate.createdByAssessorId === assessor.id;
     const isLead = leadForCourseId === assessmentToUpdate.module.course_id;
 
     if (!isCreator && !isLead) {
@@ -1028,23 +1016,92 @@ const updateAssessment = async (req, res) => {
     }
 
     if (assessmentToUpdate.submissions.length > 0) {
-        return res.status(400).json({ error: 'Cannot update an assessment with existing submissions' });
+      const allowedUpdates = ['deadline', 'duration'];
+      const requestedUpdates = Object.keys(req.body);
+
+      const disallowedFields = requestedUpdates.filter(key => 
+        !allowedUpdates.includes(key) && req.body[key] !== undefined
+      );
+      
+const stringify = require('json-stable-stringify');
+
+// inside updateAssessment's actuallyChangedDisallowedFields filter
+      const actuallyChangedDisallowedFields = disallowedFields.filter(key => {
+        const oldValue = assessmentToUpdate[key];
+        const newValue = req.body[key];
+        
+        if (oldValue instanceof Date) {
+          if (oldValue === null && newValue === null) return false;
+          if (oldValue === null || newValue === null) return true;
+          return new Date(newValue).getTime() !== oldValue.getTime();
+        }
+
+        if (typeof oldValue === 'object' && oldValue !== null) {
+          return stringify(oldValue) !== stringify(newValue);
+        }
+
+        if (oldValue === null && typeof newValue === 'object' && newValue !== null) {
+          // if old value is null and new value is an empty object, consider it unchanged
+          return Object.keys(newValue).length > 0;
+        }
+
+        return oldValue !== newValue;
+      });
+
+      if (actuallyChangedDisallowedFields.length > 0) {
+        return res.status(400).json({ 
+          error: `Cannot update fields (${actuallyChangedDisallowedFields.join(', ')}) on an assessment with existing submissions. Only deadline and duration are editable.` 
+        });
+      }
     }
+
+    const dataToUpdate = {};
+
+    if (title !== undefined) dataToUpdate.title = title;
+    if (description !== undefined) dataToUpdate.description = description;
+    if (submissionTypes !== undefined) dataToUpdate.submissionTypes = submissionTypes;
+    if (group !== undefined) dataToUpdate.group = group;
+    if (rubric !== undefined) dataToUpdate.rubric = rubric;
+    if (maxAttempts !== undefined) dataToUpdate.maxAttempts = maxAttempts;
+    if (duration !== undefined) dataToUpdate.duration = duration;
+
+    if (deadline !== undefined) {
+      if (deadline === null) {
+        dataToUpdate.deadline = null;
+      } else {
+        if (isNaN(new Date(deadline).getTime())) return res.status(400).json({ error: 'Invalid deadline date' });
+        dataToUpdate.deadline = new Date(deadline);
+      }
+    }
+    
+    if (availableFrom !== undefined) {
+      if (availableFrom === null) {
+        dataToUpdate.availableFrom = null;
+      } else {
+        if (isNaN(new Date(availableFrom).getTime())) return res.status(400).json({ error: 'Invalid availableFrom date' });
+        dataToUpdate.availableFrom = new Date(availableFrom);
+      }
+    }
+
+    const effectiveGroup = dataToUpdate.group || assessmentToUpdate.group;
+
+    if (effectiveGroup === 'SUMMATIVE') {
+        if (typeof isFinal === 'boolean') {
+            dataToUpdate.isFinal = isFinal;
+        } else if (group !== undefined && group === 'SUMMATIVE') {
+            // group is being explicitly set to SUMMATIVE, and isFinal is not provided
+            return res.status(400).json({ error: 'For summative assessments, a finality choice is required.' });
+        }
+        // if group is not being changed, and isFinal is not provided, we just keep the old value
+        // by not adding it to dataToUpdate.
+    } else if (group !== undefined && effectiveGroup !== 'SUMMATIVE') {
+        dataToUpdate.isFinal = false;
+    }
+
 
     const assessment = await prisma.assessment.update({
       where: { assessment_id: id },
-      data: {
-        title,
-        description,
-        submissionTypes,
-        group,
-        rubric,
-        deadline: deadline ? new Date(deadline) : undefined,
-        availableFrom: availableFrom ? new Date(availableFrom) : undefined,
-        maxAttempts,
-        duration,
-        isFinal: group === 'SUMMATIVE' ? isFinal : false,
-      },
+      data: dataToUpdate,
     });
     res.json(assessment);
   } catch (error) {
@@ -1074,7 +1131,7 @@ const deleteAssessment = async (req, res) => {
         return res.status(404).json({ error: 'Assessment not found' });
     }
 
-    const isCreator = assessmentToDelete.createdBy === assessor.id;
+    const isCreator = assessmentToDelete.createdByAssessorId === assessor.id;
     const isLead = leadForCourseId === assessmentToDelete.module.course_id;
 
     if (!isCreator && !isLead) {

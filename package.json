@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@heroicons/react": "^2.2.0",
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
     "autoprefixer": "^10.4.21",
     "jest": "^30.1.3",

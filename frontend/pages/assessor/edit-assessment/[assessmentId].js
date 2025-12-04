@@ -24,12 +24,14 @@ const EditAssessment = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [group, setGroup] = useState('FORMATIVE');
+  const [isFinal, setIsFinal] = useState(false);
   const [deadline, setDeadline] = useState('');
   const [availableFrom, setAvailableFrom] = useState('');
   const [isAvailableImmediately, setIsAvailableImmediately] = useState(true);
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [duration, setDuration] = useState('');
   const [questions, setQuestions] = useState([]);
+  const [originalQuestions, setOriginalQuestions] = useState([]);
   const [moduleCompetencies, setModuleCompetencies] = useState([]);
   
   const [error, setError] = useState('');
@@ -38,6 +40,26 @@ const EditAssessment = () => {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [isConfirmUnlinkedCompetenciesModalOpen, setIsConfirmUnlinkedCompetenciesModalOpen] = useState(false);
   const [questionsWithoutCompetenciesModal, setQuestionsWithoutCompetenciesModal] = useState([]);
+
+  // Helper function for deep comparison of question arrays
+  const areQuestionsEqual = (q1, q2) => {
+    if (q1.length !== q2.length) return false;
+
+    for (let i = 0; i < q1.length; i++) {
+      const { competencyIds: compIds1, options: opts1, ...rest1 } = q1[i];
+      const { competencyIds: compIds2, options: opts2, ...rest2 } = q2[i];
+
+      // Compare question properties (excluding competencyIds and options)
+      if (JSON.stringify(rest1) !== JSON.stringify(rest2)) return false;
+
+      // Compare options
+      if (opts1.length !== opts2.length || opts1.some((opt, idx) => opt !== opts2[idx])) return false;
+
+      // Compare competencyIds (order-independent)
+      if (compIds1.length !== compIds2.length || [...compIds1].sort().some((id, idx) => id !== [...compIds2].sort()[idx])) return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     if (assessmentId) {
@@ -49,6 +71,7 @@ const EditAssessment = () => {
           setTitle(assessment.title);
           setDescription(assessment.description || '');
           setGroup(assessment.group);
+          setIsFinal(assessment.isFinal || false);
           setDeadline(assessment.deadline ? new Date(assessment.deadline).toISOString().slice(0, 16) : '');
           setAvailableFrom(assessment.availableFrom ? new Date(assessment.availableFrom).toISOString().slice(0, 16) : '');
           setIsAvailableImmediately(!assessment.availableFrom);
@@ -59,8 +82,10 @@ const EditAssessment = () => {
             const rubricData = typeof assessment.rubric === 'string' ? JSON.parse(assessment.rubric) : assessment.rubric;
             if (Array.isArray(rubricData)) {
               setQuestions(rubricData);
+              setOriginalQuestions(rubricData);
             } else if (rubricData && rubricData.questions) {
               setQuestions(rubricData.questions);
+              setOriginalQuestions(rubricData.questions);
             }
           }
 
@@ -155,23 +180,29 @@ const EditAssessment = () => {
         if (q.type === 'MEDIA' || q.type === 'FILE_UPLOAD') detectedSubmissionTypes.add('FILE_UPLOAD');
     });
 
-    const rubricData = {
-        questions: questions.map(q => ({ type: q.type, text: q.text, options: q.options, marks: q.marks, markingGuide: q.markingGuide, competencyIds: q.competencyIds })),
-        answers: questions.map(q => q.correctAnswer),
-    };
-    
-    try {
-      const response = await api.put(`/assessor/assessments/${assessmentId}`, {
+    const updatePayload = {
         title,
         description,
         submissionTypes: Array.from(detectedSubmissionTypes),
         group,
-        rubric: rubricData,
+        isFinal,
         deadline: deadline ? new Date(deadline).toISOString() : null,
         availableFrom: isAvailableImmediately ? null : (availableFrom ? new Date(availableFrom).toISOString() : null),
         maxAttempts: Number(maxAttempts),
         duration: duration ? Number(duration) : null,
-      });
+    };
+
+    // Only include rubric if it has changed
+    if (!areQuestionsEqual(questions, originalQuestions)) {
+        const rubricData = {
+            questions: questions.map(q => ({ type: q.type, text: q.text, options: q.options, marks: q.marks, markingGuide: q.markingGuide, competencyIds: q.competencyIds })),
+            answers: questions.map(q => q.correctAnswer),
+        };
+        updatePayload.rubric = rubricData;
+    }
+    
+    try {
+      const response = await api.put(`/assessor/assessments/${assessmentId}`, updatePayload);
       toast.success(`Assessment '${response.data.title}' updated successfully!`);
       setTimeout(() => router.back(), 2000);
     } catch (err) {
@@ -277,6 +308,27 @@ const EditAssessment = () => {
                         <button type="button" onClick={() => setGroup('SUMMATIVE')} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${group === 'SUMMATIVE' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}>Summative</button>
                     </div>
                 </div>
+
+                <AnimatePresence>
+                  {group === 'SUMMATIVE' && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, y: -20 }}
+                      animate={{ opacity: 1, height: 'auto', y: 0, marginTop: '1.5rem' }}
+                      exit={{ opacity: 0, height: 0, y: -20, marginTop: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div>
+                        <label htmlFor="isFinal" className="block text-sm font-medium text-muted-foreground mb-2">Finality</label>
+                        <select id="isFinal" value={isFinal} onChange={(e) => setIsFinal(e.target.value === 'true')} className="input">
+                            <option value="false">This is NOT the final summative assessment</option>
+                            <option value="true">This IS the final summative assessment</option>
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-2">-- Should grading this trigger final credential issuance? --<br/>This choice determines when the on-chain credential will be issued for students.</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label htmlFor="deadline" className="block text-sm font-medium text-muted-foreground mb-2">Deadline</label>

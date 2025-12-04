@@ -20,9 +20,10 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
       JSON.stringify(credential.payloadJson, null, 2)
     )}`;
+    const fileName = (credential.payloadJson?.badge?.name || credential.payloadJson?.credentialSubject?.moduleTitle || credential.payloadJson?.credentialSubject?.courseTitle || 'credential').replace(/\s+/g, '_');
     const link = document.createElement('a');
     link.href = jsonString;
-    link.download = `${credential.payloadJson.badge.name.replace(/\s+/g, '_')}_credential.json`;
+    link.download = `${fileName}_credential.json`;
     link.click();
   };
 
@@ -30,8 +31,8 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
     window.open(`/verify?credentialId=${credential.id}`, '_blank');
   };
 
-  const title = credential.payloadJson?.badge?.name || 'Credential';
-  const description = credential.payloadJson?.badge?.description || 'No description.';
+  const title = credential.payloadJson?.badge?.name || credential.payloadJson?.credentialSubject?.moduleTitle || credential.payloadJson?.credentialSubject?.courseTitle || 'Credential';
+  const description = credential.payloadJson?.badge?.description || credential.module?.description || credential.course?.description || 'No description.';
   const credentialType = isCourse ? 'Course Credential' : 'Micro-Credential';
 
   const cardVariants = {
@@ -43,7 +44,7 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
     <>
       <motion.div
         variants={cardVariants}
-        className={`bg-card text-card-foreground rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border ${isCourse ? 'border-primary/50' : 'border-secondary/50'}`}
+        className="bg-card text-card-foreground rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-2 border-border"
       >
         <div className={`p-6 bg-gradient-to-br ${isCourse ? 'from-primary/20 to-card' : 'from-secondary/20 to-card'}`}>
           <div className="flex justify-between items-start">

@@ -9,6 +9,28 @@ import CompetencySelector from '../../components/CompetencySelector';
 import { customStyles } from '../../styles/react-select-styles';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
+import CollapsibleSection from '../../components/CollapsibleSection';
+
+// Helper function to group submissions by assessment title
+const groupAndSortSubmissions = (submissions) => {
+  if (!submissions) return {};
+
+  const grouped = submissions.reduce((acc, submission) => {
+    const title = submission.assessment.title;
+    if (!acc[title]) {
+      acc[title] = [];
+    }
+    acc[title].push(submission);
+    return acc;
+  }, {});
+
+  // Sort submissions within each group by date
+  for (const title in grouped) {
+    grouped[title].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }
+
+  return grouped;
+};
 
 const GradeSubmissions = () => {
   const router = useRouter();
@@ -110,6 +132,12 @@ const GradeSubmissions = () => {
   const allStudents = [...submissions.map(s => s.student), ...observations.flatMap(o => o.students.map(s => s.student))];
   const uniqueStudents = [...new Map(allStudents.map(item => [item['id'], item])).values()];
 
+
+  const pendingSubmissions = submissions.filter(s => !s.gradedAt);
+  const gradedSubmissions = submissions.filter(s => s.gradedAt);
+  const groupedPending = groupAndSortSubmissions(pendingSubmissions);
+  const groupedGraded = groupAndSortSubmissions(gradedSubmissions);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -164,12 +192,18 @@ const GradeSubmissions = () => {
             <div className="mt-4">
               {activeTab === 'pending' && (
                 <>
-                  {submissions.filter(s => !s.gradedAt).length === 0 ? (
+                  {pendingSubmissions.length === 0 ? (
                     <p className="text-muted-foreground">No pending submissions for this module.</p>
                   ) : (
-                    <div className="space-y-4">
-                      {submissions.filter(s => !s.gradedAt).map(submission => (
-                        <SubmissionCard key={submission.submission_id} submission={submission} onSelect={setSelectedItem} />
+                    <div className="space-y-2">
+                      {Object.entries(groupedPending).map(([title, subs]) => (
+                        <CollapsibleSection key={title} title={`${title} (${subs.length})`}>
+                          <div className="space-y-2 pt-2">
+                            {subs.map(submission => (
+                              <SubmissionCard key={submission.submission_id} submission={submission} onSelect={setSelectedItem} />
+                            ))}
+                          </div>
+                        </CollapsibleSection>
                       ))}
                     </div>
                   )}
@@ -178,14 +212,20 @@ const GradeSubmissions = () => {
 
               {activeTab === 'graded' && (
                 <>
-                  {submissions.filter(s => s.gradedAt).length === 0 ? (
+                  {gradedSubmissions.length === 0 ? (
                     <p className="text-muted-foreground">No submissions graded yet for this module.</p>
                   ) : (
-                    <div className="space-y-4">
-                      {submissions.filter(s => s.gradedAt).map(submission => (
-                        <SubmissionCard key={submission.submission_id} submission={submission} onSelect={setSelectedItem} />
-                      ))}
-                    </div>
+                    <div className="space-y-2">
+                    {Object.entries(groupedGraded).map(([title, subs]) => (
+                      <CollapsibleSection key={title} title={`${title} (${subs.length})`}>
+                        <div className="space-y-2 pt-2">
+                          {subs.map(submission => (
+                            <SubmissionCard key={submission.submission_id} submission={submission} onSelect={setSelectedItem} />
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    ))}
+                  </div>
                   )}
                 </>
               )}
@@ -562,6 +602,7 @@ const MediaViewerModal = ({ isOpen, mediaUrl, mediaType, onClose }) => {
   );
 };
 
+import CompetencyWarningModal from '../../components/CompetencyWarningModal';
 const SubmissionGrader = ({ submission, onGrade, onError }) => {
   const [questionScores, setQuestionScores] = useState([]);
   const [notes, setNotes] = useState('');
@@ -572,6 +613,10 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
   const [selectedMediaUrl, setSelectedMediaUrl] = useState('');
   const [selectedMediaType, setSelectedMediaType] = useState('');
+  const [isCompetencyWarningModalOpen, setIsCompetencyWarningModalOpen] = useState(false);
+  const [competencyValidationErrors, setCompetencyValidationErrors] = useState([]);
+  const [shouldFinalize, setShouldFinalize] = useState(false);
+
 
   useEffect(() => {
     if (!submission || !submission.assessment) {
@@ -682,13 +727,7 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
   const totalScore = questionScores.reduce((acc, score) => acc + (Number(score) || 0), 0);
   const totalMarks = submission.assessment.rubric.questions.reduce((acc, q) => acc + Number(q.marks), 0);
 
-  const handleGradeAction = (shouldFinalize) => {
-    const hasErrors = scoreErrors.some(e => e !== '');
-    if (hasErrors) {
-      onError('Please correct the scores in red before submitting.');
-      return;
-    }
-
+  const proceedWithGrading = (shouldFinalize) => {
     const grade = {
       notes,
       questionScores: submission.assessment.rubric.questions.map((q, i) => ({ questionIndex: i, score: Number(questionScores[i]) || 0 })),
@@ -698,9 +737,44 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
     setIsEditing(false); // Exit edit mode after saving
   };
   
+  const handleGradeAction = (shouldFinalize) => {
+    const hasErrors = scoreErrors.some(e => e !== '');
+    if (hasErrors) {
+      onError('Please correct the scores in red before submitting.');
+      return;
+    }
+  
+    const competencyErrors = [];
+    for (let i = 0; i < submission.assessment.rubric.questions.length; i++) {
+      const question = submission.assessment.rubric.questions[i];
+      const score = Number(questionScores[i]) || 0;
+      const hasCompetencies = question.competencyIds && question.competencyIds.length > 0;
+      
+      if (score > 0 && hasCompetencies) {
+        const demonstratedCompetencies = competencyEvidence[i] ? Object.values(competencyEvidence[i]).some(checked => checked) : false;
+        if (!demonstratedCompetencies) {
+          competencyErrors.push(`Question ${i + 1}: Score is ${score} but no competency is checked.`);
+        }
+      }
+    }
+  
+    if (competencyErrors.length > 0) {
+      setCompetencyValidationErrors(competencyErrors);
+      setShouldFinalize(shouldFinalize);
+      setIsCompetencyWarningModalOpen(true);
+    } else {
+      proceedWithGrading(shouldFinalize);
+    }
+  };
+  
   const handleConfirmFinalize = () => {
     handleGradeAction(true);
     setIsConfirmModalOpen(false);
+  };
+
+  const handleProceedWithGrading = () => {
+    setIsCompetencyWarningModalOpen(false);
+    proceedWithGrading(shouldFinalize);
   };
   
   const handleFinalizeClick = () => {
@@ -748,7 +822,7 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
           <div key={index} className="border border-border rounded-lg p-4">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-semibold text-lg">Question {index + 1}: {q.text}</h3>
-              {isUnanswered && (
+              {isUnanswered && submission.assessment.duration > 0 && (
                 <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
                   UNANSWERED
                 </span>
@@ -760,8 +834,10 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
               <div>
                 <h5 className="font-semibold text-foreground mb-2">Student&apos;s Answer</h5>
                 <div className="bg-muted/50 p-3 rounded-md max-h-48 overflow-y-auto text-sm text-muted-foreground">
-                  {isUnanswered ? (
-                    <p>No answer provided.</p>
+                  {isUnanswered && submission.assessment.duration > 0 ? (
+                    <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">
+                      UNANSWERED
+                    </span>
                   ) : (
                     <>
                       {(q.type === 'TEXT' || q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER') && (
@@ -890,6 +966,12 @@ const SubmissionGrader = ({ submission, onGrade, onError }) => {
         mediaUrl={selectedMediaUrl}
         mediaType={selectedMediaType}
         onClose={closeMediaModal}
+      />
+      <CompetencyWarningModal
+        isOpen={isCompetencyWarningModalOpen}
+        onClose={() => setIsCompetencyWarningModalOpen(false)}
+        onConfirm={handleProceedWithGrading}
+        errors={competencyValidationErrors}
       />
     </div>
   );

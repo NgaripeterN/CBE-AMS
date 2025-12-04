@@ -279,6 +279,10 @@ model MicroCredential {
   status      CredentialStatus @default(PENDING)
   payloadJson Json
   type        CredentialType   @default(MICRO_CREDENTIAL)
+  shareToken  String?          @unique
+  shareTokenExpiresAt DateTime?
+
+  @@unique([student_id, module_id])
 }
 
 model CourseCredential {
@@ -294,6 +298,8 @@ model CourseCredential {
   txHash                     String?
   status                     CredentialStatus @default(PENDING)
   payloadJson                Json
+  shareToken                 String?          @unique
+  shareTokenExpiresAt        DateTime?
 
   @@unique([student_id, course_id])
 }

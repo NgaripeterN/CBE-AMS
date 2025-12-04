@@ -139,9 +139,29 @@ const getWallet = async (req, res) => {
   try {
     const microCredentials = await prisma.microCredential.findMany({
       where: { student_id: studentId },
+      include: {
+        student: {
+          include: {
+            user: true, // Include the User model for student's name, email, regNumber
+          },
+        },
+        module: {
+          include: {
+            course: true, // Include the Course model for course details if needed
+          },
+        },
+      },
     });
     const courseCredentials = await prisma.courseCredential.findMany({
       where: { student_id: studentId },
+      include: {
+        student: {
+          include: {
+            user: true, // Include the User model for student's name, email, regNumber
+          },
+        },
+        course: true, // Include the Course model for course details
+      },
     });
     res.json({ microCredentials, courseCredentials });
   } catch (error) {
