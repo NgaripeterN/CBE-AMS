@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "dev": "nodemon index.js",
     "migrate": "npx prisma migrate dev",
     "db:seed": "node seed.js",
