@@ -14,5 +14,5 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "Starting development server..."
-npm run dev
+echo "Starting production server..."
+npm start
