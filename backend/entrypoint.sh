@@ -1,5 +1,6 @@
 #!/bin/sh
 
+echo "DATABASE_URL: $DATABASE_URL"
 echo "Running migrations..."
 npx prisma migrate deploy
 if [ $? -ne 0 ]; then
