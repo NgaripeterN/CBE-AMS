@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useDropzone } from 'react-dropzone';
 import ThemeSwitcher from '../components/ThemeSwitcher';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'; // Import the ArrowLeftIcon
 
 const VerificationResult = ({ result }) => {
     if (!result) return null;
@@ -90,8 +91,17 @@ const VerifyCredential = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-4xl font-bold text-foreground">Credential Verification</h1>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mr-2"
+            aria-label="Go back"
+          >
+            <ArrowLeftIcon className="h-6 w-6" />
+          </button>
+          <h1 className="text-4xl font-bold text-foreground">Credential Verification</h1>
+        </div>
         <ThemeSwitcher />
       </div>
       <p className="text-muted-foreground mb-8">Verify the authenticity of a credential by uploading its JSON file or using a share link.</p>
