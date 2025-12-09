@@ -896,36 +896,74 @@ const getRandomSubmission = async (req, res) => {
 const getRecentActivity = async (req, res) => {
   const { userId } = req.user;
 
-  const assessor = await prisma.assessor.findUnique({ where: { userId: userId } });
-  if (!assessor) {
-    return res.status(404).json({ error: 'Assessor profile not found' });
-  }
+  try {
+    const assessor = await prisma.assessor.findUnique({ where: { userId: userId } });
+    if (!assessor) {
+      return res.status(404).json({ error: 'Assessor profile not found' });
+    }
 
-  const recentSubmissions = await prisma.submission.findMany({
-    where: {
-      student: {
-        enrollments: {
-          some: { assessor_id: assessor.id }
+    // Get IDs of active modules assigned to the assessor
+    const offeringAssignments = await prisma.offeringAssignment.findMany({
+      where: {
+        assessorId: assessor.id,
+        offering: {
+          module: { status: 'PUBLISHED' }
         }
+      },
+      select: { offering: { select: { moduleId: true } } }
+    });
+    const activeModuleIds = offeringAssignments.map(oa => oa.offering.moduleId);
+
+    if (activeModuleIds.length === 0) {
+      return res.json([]);
+    }
+
+    // Get all student enrollments for this assessor in those active modules
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        assessor_id: assessor.id,
+        module_id: { in: activeModuleIds }
+      },
+      select: {
+        student_id: true,
+        module_id: true
       }
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: {
-      student: { include: { user: true } },
-      assessment: true,
-    },
-  });
+    });
 
-  const formattedSubmissions = recentSubmissions.map(s => ({
-    id: s.submission_id,
-    type: 'submission',
-    student: s.student.user.name,
-    assessment: s.assessment.title,
-    time: s.createdAt,
-  }));
+    if (enrollments.length === 0) {
+      return res.json([]);
+    }
 
-  res.json(formattedSubmissions);
+    const enrollmentConditions = enrollments.map(e => ({
+      student_id: e.student_id,
+      assessment: { module_id: e.module_id }
+    }));
+
+    const recentSubmissions = await prisma.submission.findMany({
+      where: {
+        OR: enrollmentConditions,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        student: { include: { user: true } },
+        assessment: true,
+      },
+    });
+
+    const formattedSubmissions = recentSubmissions.map(s => ({
+      id: s.submission_id,
+      type: 'submission',
+      student: s.student.user.name,
+      assessment: s.assessment.title,
+      time: s.createdAt,
+    }));
+
+    res.json(formattedSubmissions);
+  } catch (error) {
+    console.error('Error fetching recent activity:', error);
+    res.status(500).json({ error: 'An error occurred while fetching recent activity' });
+  }
 };
 
 // @desc    Get all assessments for a module
@@ -1316,55 +1354,70 @@ const getDashboardMetrics = async (req, res) => {
       return res.status(404).json({ error: 'Assessor profile not found' });
     }
 
-    const thirtyDaysAgo = new Date(new Date().setDate(new Date().getDate() - 30));
-
-    const submissionsToGrade = await prisma.submission.count({
+    // Get IDs of active modules assigned to the assessor
+    const offeringAssignments = await prisma.offeringAssignment.findMany({
       where: {
-        gradedAt: null,
-        student: {
-          enrollments: {
-            some: { assessor_id: assessor.id }
-          }
+        assessorId: assessor.id,
+        offering: {
+          module: { status: 'PUBLISHED' }
         }
+      },
+      select: { offering: { select: { moduleId: true } } }
+    });
+    const activeModuleIds = offeringAssignments.map(oa => oa.offering.moduleId);
+
+    // Get all student enrollments for this assessor in those active modules
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        assessor_id: assessor.id,
+        module_id: { in: activeModuleIds }
+      },
+      select: {
+        student_id: true,
+        module_id: true
       }
     });
 
-    const submissionsGradedLast30Days = await prisma.submission.count({
-      where: {
-        gradedAt: {
-          gte: thirtyDaysAgo,
-        },
-        student: {
-          enrollments: {
-            some: { assessor_id: assessor.id }
-          }
+    let submissionsToGrade = 0;
+    let submissionsGradedLast30Days = 0;
+
+    if (enrollments.length > 0) {
+      const enrollmentConditions = enrollments.map(e => ({
+        student_id: e.student_id,
+        assessment: { module_id: e.module_id }
+      }));
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      submissionsToGrade = await prisma.submission.count({
+        where: {
+          gradedAt: null,
+          OR: enrollmentConditions,
         }
-      }
-    });
+      });
+
+      submissionsGradedLast30Days = await prisma.submission.count({
+        where: {
+          gradedAt: { gte: thirtyDaysAgo },
+          OR: enrollmentConditions,
+        }
+      });
+    }
 
     const upcomingDeadlines = await prisma.assessment.count({
       where: {
         deadline: { gte: new Date() },
-        module: {
-          enrollments: {
-            some: { assessor_id: assessor.id }
-          }
-        }
+        module_id: { in: activeModuleIds }
       }
     });
-
-    const activeModulesCount = await prisma.offeringAssignment.count({
-      where: {
-        assessorId: assessor.id,
-        offering: {
-          module: {
-            status: 'PUBLISHED'
-          }
-        }
-      }
+    
+    res.json({
+      submissionsToGrade,
+      submissionsGradedLast30Days,
+      upcomingDeadlines,
+      activeModules: activeModuleIds.length
     });
-
-    res.json({ submissionsToGrade, submissionsGradedLast30Days, upcomingDeadlines, activeModules: activeModulesCount });
   } catch (error) {
     console.error('Error fetching dashboard metrics:', error);
     res.status(500).json({ error: 'An error occurred while fetching dashboard metrics' });
