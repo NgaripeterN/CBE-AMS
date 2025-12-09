@@ -183,7 +183,7 @@ const CurriculumPage = () => {
                                                         title={credentialModules.has(item.module_id) ? 'Remove from credential requirements' : 'Add to credential requirements'}
                                                     >
                                                         {credentialModules.has(item.module_id) ? (
-                                                            <SolidStarIcon className="h-6 w-6" />
+                                                            <SolidStarIcon className="h-6 w-6 text-yellow-500 drop-shadow-[0_0_8px_rgba(252,211,77,0.7)]" />
                                                         ) : (
                                                             <StarIcon className="h-6 w-6" />
                                                         )}
