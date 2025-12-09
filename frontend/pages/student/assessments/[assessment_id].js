@@ -127,9 +127,9 @@ const AssessmentSubmissionPage = () => {
       formData.append('folder', folder);
       formData.append('timestamp', timestamp);
       formData.append('signature', signature);
-      formData.append('api_key', process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY);
+      formData.append('api_key', process.env.CLOUDINARY_API_KEY);
 
-      const response = await axios.post(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/upload`, formData, {
+      const response = await axios.post(`https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/upload`, formData, {
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadingProgress(percentCompleted);
