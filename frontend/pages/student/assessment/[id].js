@@ -98,7 +98,7 @@ const AssessmentPage = () => {
           {(assessment?.questions || []).map((question) => (
             <div key={question.id ?? question.questionNumber} className="mb-6">
               <label htmlFor={`question-${question.id}`} className="block text-lg font-medium mb-2">
-                Question {question.questionNumber}. {question.text} {question.points && <span className="text-sm font-normal text-gray-500 ml-2">({question.points} points)</span>}
+                Question {question.questionNumber}. {question.text} {question.marks && <span className="text-sm font-normal text-gray-500 ml-2">({question.marks} marks)</span>}
               </label>
 
               {question.type === 'MULTIPLE_CHOICE' ? (
