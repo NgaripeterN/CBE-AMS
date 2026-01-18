@@ -288,14 +288,14 @@ const ModuleCard = ({ module, completed, openDropdown, onDropdownClick }) => (
         Manage Module <ChevronDownIcon className={`w-5 h-5 ml-2 transition-transform ${openDropdown === module.module_id ? 'rotate-180' : ''}`} />
       </button>
       {openDropdown === module.module_id && (
-        <div className="absolute top-full mt-2 w-full rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 z-[9999]">
-          <div className="py-1" role="menu" aria-orientation="vertical">
-            <Link href={`/assessor/enroll-student?offeringId=${module.offeringId}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">Enroll Student</a></Link>
-            <Link href={`/assessor/create-assessment?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">Create Assessment</a></Link>
-            <Link href={`/assessor/manage-assessments?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">Manage Assessments</a></Link>
-            <Link href={`/assessor/announcements?moduleId=${module.module_id}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">Announcements</a></Link>
-            <Link href={`/assessor/grade-submissions?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">Grade Submissions</a></Link>
-            <Link href={`/assessor/enrolled-students?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2 text-sm text-foreground hover:bg-muted/50" role="menuitem">View Enrolled Students</a></Link>
+        <div className="absolute top-full left-0 right-0 mt-2 rounded-md shadow-2xl bg-card ring-1 ring-black ring-opacity-5 z-[100] border border-border">
+          <div className="py-1 flex flex-col" role="menu" aria-orientation="vertical">
+            <Link href={`/assessor/enroll-student?offeringId=${module.offeringId}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">Enroll Student</a></Link>
+            <Link href={`/assessor/create-assessment?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">Create Assessment</a></Link>
+            <Link href={`/assessor/manage-assessments?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">Manage Assessments</a></Link>
+            <Link href={`/assessor/announcements?moduleId=${module.module_id}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">Announcements</a></Link>
+            <Link href={`/assessor/grade-submissions?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">Grade Submissions</a></Link>
+            <Link href={`/assessor/enrolled-students?module_id=${module.module_id}`} legacyBehavior><a className="block px-4 py-2.5 text-sm text-foreground hover:bg-muted/80 transition-colors" role="menuitem">View Enrolled Students</a></Link>
           </div>
         </div>
       )}
