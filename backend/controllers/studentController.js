@@ -91,9 +91,21 @@ const getDashboard = async (req, res) => {
 
     const credentialsEarned = microCredentialsCount + courseCredentialsCount;
 
-    const activeModulesEnrolled = await prisma.enrollment.count({
-        where: { student_id: studentId },
+    const allEnrollments = await prisma.enrollment.findMany({
+        where: { student_id: studentId, status: 'ACTIVE' },
+        select: { module_id: true },
     });
+
+    const earnedMicroCredentials = await prisma.microCredential.findMany({
+        where: { student_id: studentId },
+        select: { module_id: true },
+    });
+
+    const earnedModuleIds = new Set(earnedMicroCredentials.map((c) => c.module_id));
+
+    const activeModulesEnrolled = allEnrollments.filter(
+        (e) => !earnedModuleIds.has(e.module_id)
+    ).length;
 
     const enrollments = await prisma.enrollment.findMany({
       where: { student_id: studentId },
