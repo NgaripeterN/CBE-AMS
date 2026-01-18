@@ -55,6 +55,34 @@ const Wallet = () => {
 
   const { microCredentials, courseCredentials } = walletData;
 
+  // Group micro-credentials by Year and Semester
+  const groupedMicroCredentials = microCredentials.reduce((acc, cred) => {
+    const year = cred.module?.yearOfStudy || 'Unknown Year';
+    const semester = cred.module?.semesterOfStudy || 'Unknown Semester';
+    const key = `${year}-${semester}`;
+
+    if (!acc[key]) {
+      acc[key] = {
+        year,
+        semester,
+        credentials: [],
+      };
+    }
+    acc[key].credentials.push(cred);
+    return acc;
+  }, {});
+
+  // Sort groups: Years ascending, then Semesters ascending. Unknowns at the end.
+  const sortedGroups = Object.values(groupedMicroCredentials).sort((a, b) => {
+    if (a.year === 'Unknown Year') return 1;
+    if (b.year === 'Unknown Year') return -1;
+    if (a.year !== b.year) return a.year - b.year;
+    
+    if (a.semester === 'Unknown Semester') return 1;
+    if (b.semester === 'Unknown Semester') return -1;
+    return a.semester - b.semester;
+  });
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -104,13 +132,35 @@ const Wallet = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+              className="space-y-12"
             >
-              {microCredentials.length > 0 ? (
-                microCredentials.map((credential) => (
-                  <motion.div key={credential.id} variants={containerVariants}>
-                    <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
-                  </motion.div>
+              {sortedGroups.length > 0 ? (
+                sortedGroups.map((group) => (
+                  <div key={`${group.year}-${group.semester}`} className="space-y-6">
+                    <h3 className="text-2xl font-bold text-primary flex items-center gap-2">
+                       <span className="bg-primary/10 p-2 rounded-lg">
+                         {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
+                       </span>
+                       {group.semester !== 'Unknown Semester' && (
+                         <span className="text-muted-foreground text-xl">
+                            • Semester {group.semester}
+                         </span>
+                       )}
+                    </h3>
+                    <motion.div 
+                      className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                      variants={containerVariants}
+                      initial="hidden"
+                      animate="visible"
+                    >
+                      {group.credentials.map((credential) => (
+                        <motion.div key={credential.id} variants={containerVariants} className="h-full">
+                          <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                    <div className="border-b border-border/50" />
+                  </div>
                 ))
               ) : (
                 <div className="col-span-full text-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg">

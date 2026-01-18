@@ -44,9 +44,9 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
     <>
       <motion.div
         variants={cardVariants}
-        className="bg-card text-card-foreground rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-2 border-border"
+        className="bg-card text-card-foreground rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-2 border-border h-full flex flex-col"
       >
-        <div className={`p-6 bg-gradient-to-br ${isCourse ? 'from-primary/20 to-card' : 'from-secondary/20 to-card'}`}>
+        <div className={`p-6 bg-gradient-to-br ${isCourse ? 'from-primary/20 to-card' : 'from-secondary/20 to-card'} flex-grow`}>
           <div className="flex justify-between items-start">
             <h2 className="text-2xl font-bold text-foreground">{title}</h2>
             <span className={`px-3 py-1 text-sm font-semibold rounded-full ${isCourse ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-muted-foreground'}`}>
