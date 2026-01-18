@@ -270,8 +270,15 @@ const AssessmentSubmissionPage = () => {
                     return (
                         <div key={index} className="bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 rounded-lg p-6 mb-6">
                         <div className="flex items-start flex-col">
-                            <span className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-1">Question {index + 1}</span>
-                            <p className="text-lg font-semibold text-gray-900 dark:text-white">{q.text}</p>
+                            <div className="flex justify-between w-full items-center mb-2">
+                                <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Question {index + 1}</span>
+                                {q.marks !== undefined && (
+                                    <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                        {q.marks} marks
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">{q.text}</p>
                         </div>
                         <div className="mt-4 pl-10">
                             {q.type === 'MCQ' && (
