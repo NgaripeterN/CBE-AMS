@@ -123,9 +123,8 @@ const MyModules = () => {
     ...courses.map(course => ({ value: course.course_id, label: course.name }))
   ];
 
-  // Group completed modules by Year, then Semester (matching student view)
-  const groupedCompletedModules = modules.reduce((acc, module) => {
-    if (activeTab !== 'completed') return acc;
+  // Group modules by Year, then Semester (for both Active and Completed)
+  const groupedModules = modules.reduce((acc, module) => {
     const year = module.yearOfStudy || 'Unknown Year';
     const semester = module.semesterOfStudy || module.semester || 'Unknown Semester';
 
@@ -140,7 +139,7 @@ const MyModules = () => {
   }, {});
 
   // Sort Years
-  const sortedYears = Object.keys(groupedCompletedModules).sort((a, b) => {
+  const sortedYears = Object.keys(groupedModules).sort((a, b) => {
     if (a === 'Unknown Year') return 1;
     if (b === 'Unknown Year') return -1;
     return a - b;
@@ -177,90 +176,63 @@ const MyModules = () => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.2 }}
             >
-              {activeTab === 'active' && (
-                modules.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {modules.map((module, i) => (
-                      <motion.div
-                        key={module.module_id}
-                        custom={i}
-                        variants={cardVariants}
-                        initial="hidden"
-                        animate="visible"
-                      >
-                        <ModuleCard 
-                          module={module} 
-                          completed={false}
-                          openDropdown={openDropdown}
-                          onDropdownClick={handleDropdownClick}
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-16">No active modules found for the selected course.</p>
-                )
-              )}
-
-              {activeTab === 'completed' && (
+              {sortedYears.length > 0 ? (
                 <div className="space-y-8">
-                  {sortedYears.length > 0 ? (
-                    sortedYears.map((year, yearIndex) => (
-                      <div key={year} className="space-y-4">
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white pl-1 border-l-4 border-primary/50">
-                          {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
-                        </h2>
-                        
-                        {Object.keys(groupedCompletedModules[year])
-                          .sort((a, b) => {
-                             if (a === 'Unknown Semester') return 1;
-                             if (b === 'Unknown Semester') return -1;
-                             return a - b;
-                          })
-                          .map((semester, semIndex) => (
-                            <CollapsibleSection 
-                              key={`${year}-${semester}`} 
-                              title={
-                                <div className="flex items-center gap-3">
-                                  <span className="text-muted-foreground font-medium">
-                                    {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
-                                  </span>
-                                  <span className="bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold text-primary">
-                                    {groupedCompletedModules[year][semester].length} Modules
-                                  </span>
-                                </div>
-                              }
-                              defaultOpen={yearIndex === sortedYears.length - 1}
-                            >
-                              <div className="pt-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {groupedCompletedModules[year][semester].map((module, i) => (
-                                      <motion.div
-                                        key={module.module_id}
-                                        custom={i}
-                                        variants={cardVariants}
-                                        initial="hidden"
-                                        animate="visible"
-                                        className="h-full"
-                                      >
-                                        <ModuleCard 
-                                          module={module} 
-                                          completed={true}
-                                          openDropdown={openDropdown}
-                                          onDropdownClick={handleDropdownClick}
-                                        />
-                                      </motion.div>
-                                    ))}
-                                  </div>
+                  {sortedYears.map((year, yearIndex) => (
+                    <div key={year} className="space-y-4">
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white pl-1 border-l-4 border-primary/50">
+                        {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
+                      </h2>
+                      
+                      {Object.keys(groupedModules[year])
+                        .sort((a, b) => {
+                           if (a === 'Unknown Semester') return 1;
+                           if (b === 'Unknown Semester') return -1;
+                           return a - b;
+                        })
+                        .map((semester, semIndex) => (
+                          <CollapsibleSection 
+                            key={`${year}-${semester}`} 
+                            title={
+                              <div className="flex items-center gap-3">
+                                <span className="text-muted-foreground font-medium">
+                                  {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
+                                </span>
+                                <span className="bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold text-primary">
+                                  {groupedModules[year][semester].length} Modules
+                                </span>
                               </div>
-                            </CollapsibleSection>
-                          ))}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-muted-foreground text-center py-16">No completed modules found for the selected course.</p>
-                  )}
+                            }
+                            defaultOpen={yearIndex === sortedYears.length - 1}
+                          >
+                            <div className="pt-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                  {groupedModules[year][semester].map((module, i) => (
+                                    <motion.div
+                                      key={module.module_id}
+                                      custom={i}
+                                      variants={cardVariants}
+                                      initial="hidden"
+                                      animate="visible"
+                                      className="h-full"
+                                    >
+                                      <ModuleCard 
+                                        module={module} 
+                                        completed={activeTab === 'completed'}
+                                        openDropdown={openDropdown}
+                                        onDropdownClick={handleDropdownClick}
+                                      />
+                                    </motion.div>
+                                  ))}
+                                </div>
+                            </div>
+                          </CollapsibleSection>
+                        ))}
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-16">No {activeTab} modules found for the selected course.</p>
               )}
             </motion.div>
           </AnimatePresence>
