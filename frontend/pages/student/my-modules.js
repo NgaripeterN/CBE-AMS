@@ -3,6 +3,7 @@ import api from '../../lib/api';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircleIcon, ClockIcon } from '@heroicons/react/24/solid';
+import CollapsibleSection from '../../components/CollapsibleSection';
 
 const MyModulesPage = () => {
   const [modules, setModules] = useState([]);
@@ -159,56 +160,62 @@ const MyModulesPage = () => {
           )}
 
           {activeTab === 'completed' && (
-            <div className="space-y-16">
+            <div className="space-y-6">
               {sortedCompletedGroups.length > 0 ? (
-                sortedCompletedGroups.map((group) => (
-                  <div key={`${group.year}-${group.semester}`} className="space-y-8">
-                    <h3 className="text-2xl font-bold text-primary flex items-center gap-3">
-                       <span className="bg-primary/10 px-4 py-2 rounded-xl">
-                         {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
-                       </span>
-                       {group.semester !== 'Unknown Semester' && (
-                         <span className="text-muted-foreground">
+                sortedCompletedGroups.map((group, index) => (
+                  <CollapsibleSection 
+                    key={`${group.year}-${group.semester}`} 
+                    title={
+                      <div className="flex items-center gap-3">
+                        <span className="bg-primary/10 px-4 py-2 rounded-xl text-primary font-bold">
+                          {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
+                        </span>
+                        {group.semester !== 'Unknown Semester' && (
+                          <span className="text-muted-foreground font-medium">
                             • Semester {group.semester}
-                         </span>
-                       )}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {group.modules.map((module, i) => (
-                        <motion.div
-                          key={module.module_id}
-                          custom={i}
-                          variants={cardVariants}
-                          initial="hidden"
-                          animate="visible"
-                          className="h-full"
-                        >
-                          <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
-                            <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
-                              <div className="p-8 flex-grow">
-                                <div className="flex justify-between items-start mb-4">
-                                  <span className="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
-                                    Completed
-                                  </span>
-                                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                                </div>
-                                <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
-                                  {module.title}
-                                </h2>
-                                <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
-                              </div>
-                              <div className="px-8 pb-8">
-                                <div className="w-full text-center px-4 py-3 bg-secondary text-secondary-foreground rounded-xl font-bold shadow-sm group-hover:bg-secondary/90 transition-colors">
-                                  View Details
-                                </div>
-                              </div>
-                            </a>
-                          </Link>
-                        </motion.div>
-                      ))}
+                          </span>
+                        )}
+                      </div>
+                    }
+                    defaultOpen={index === sortedCompletedGroups.length - 1}
+                  >
+                    <div className="pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                          {group.modules.map((module, i) => (
+                            <motion.div
+                              key={module.module_id}
+                              custom={i}
+                              variants={cardVariants}
+                              initial="hidden"
+                              animate="visible"
+                              className="h-full"
+                            >
+                              <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
+                                <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
+                                  <div className="p-8 flex-grow">
+                                    <div className="flex justify-between items-start mb-4">
+                                      <span className="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
+                                        Completed
+                                      </span>
+                                      <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
+                                      {module.title}
+                                    </h2>
+                                    <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
+                                  </div>
+                                  <div className="px-8 pb-8">
+                                    <div className="w-full text-center px-4 py-3 bg-secondary text-secondary-foreground rounded-xl font-bold shadow-sm group-hover:bg-secondary/90 transition-colors">
+                                      View Details
+                                    </div>
+                                  </div>
+                                </a>
+                              </Link>
+                            </motion.div>
+                          ))}
+                        </div>
                     </div>
-                    <div className="border-b border-border/50 pt-8" />
-                  </div>
+                  </CollapsibleSection>
                 ))
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">

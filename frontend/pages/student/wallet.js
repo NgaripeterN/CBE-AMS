@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../lib/api';
 import CredentialCard from '../../components/CredentialCard';
+import CollapsibleSection from '../../components/CollapsibleSection';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Wallet = () => {
@@ -132,35 +133,41 @@ const Wallet = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-12"
+              className="space-y-6"
             >
               {sortedGroups.length > 0 ? (
-                sortedGroups.map((group) => (
-                  <div key={`${group.year}-${group.semester}`} className="space-y-6">
-                    <h3 className="text-2xl font-bold text-primary flex items-center gap-2">
-                       <span className="bg-primary/10 p-2 rounded-lg">
-                         {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
-                       </span>
-                       {group.semester !== 'Unknown Semester' && (
-                         <span className="text-muted-foreground text-xl">
-                            • Semester {group.semester}
-                         </span>
-                       )}
-                    </h3>
-                    <motion.div 
-                      className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-                      variants={containerVariants}
-                      initial="hidden"
-                      animate="visible"
-                    >
-                      {group.credentials.map((credential) => (
-                        <motion.div key={credential.id} variants={containerVariants} className="h-full">
-                          <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
+                sortedGroups.map((group, index) => (
+                  <CollapsibleSection 
+                    key={`${group.year}-${group.semester}`} 
+                    title={
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary/10 px-2 py-1 rounded text-primary text-sm font-medium">
+                          {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
+                        </span>
+                        {group.semester !== 'Unknown Semester' && (
+                          <span className="text-muted-foreground text-sm">
+                            Semester {group.semester}
+                          </span>
+                        )}
+                      </div>
+                    }
+                    defaultOpen={index === sortedGroups.length - 1}
+                  >
+                    <div className="pt-4">
+                        <motion.div 
+                          className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                          variants={containerVariants}
+                          initial="hidden"
+                          animate="visible"
+                        >
+                          {group.credentials.map((credential) => (
+                            <motion.div key={credential.id} variants={containerVariants} className="h-full">
+                              <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
+                            </motion.div>
+                          ))}
                         </motion.div>
-                      ))}
-                    </motion.div>
-                    <div className="border-b border-border/50" />
-                  </div>
+                    </div>
+                  </CollapsibleSection>
                 ))
               ) : (
                 <div className="col-span-full text-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg">
