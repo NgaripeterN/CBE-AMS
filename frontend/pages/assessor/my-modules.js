@@ -3,6 +3,7 @@ import { getAssessorModules, getAssessorCourses } from '../../lib/api';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircleIcon, ClockIcon, ChevronDownIcon, BookOpenIcon } from '@heroicons/react/24/solid';
+import CollapsibleSection from '../../components/CollapsibleSection';
 
 const CustomSelect = ({ options, value, onChange, placeholder }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -122,24 +123,28 @@ const MyModules = () => {
     ...courses.map(course => ({ value: course.course_id, label: course.name }))
   ];
 
+  // Group completed modules by Year, then Semester (matching student view)
   const groupedCompletedModules = modules.reduce((acc, module) => {
     if (activeTab !== 'completed') return acc;
-    const academicYear = module.academicYear || 'No Academic Year';
-    const yearOfStudy = module.yearOfStudy || 'No Year of Study';
-    const semester = module.semester || 'No Semester';
+    const year = module.yearOfStudy || 'Unknown Year';
+    const semester = module.semesterOfStudy || module.semester || 'Unknown Semester';
 
-    if (!acc[academicYear]) {
-      acc[academicYear] = {};
+    if (!acc[year]) {
+      acc[year] = {};
     }
-    if (!acc[academicYear][yearOfStudy]) {
-      acc[academicYear][yearOfStudy] = {};
+    if (!acc[year][semester]) {
+      acc[year][semester] = [];
     }
-    if (!acc[academicYear][yearOfStudy][semester]) {
-      acc[academicYear][yearOfStudy][semester] = [];
-    }
-    acc[academicYear][yearOfStudy][semester].push(module);
+    acc[year][semester].push(module);
     return acc;
   }, {});
+
+  // Sort Years
+  const sortedYears = Object.keys(groupedCompletedModules).sort((a, b) => {
+    if (a === 'Unknown Year') return 1;
+    if (b === 'Unknown Year') return -1;
+    return a - b;
+  });
 
   return (
     <div className="container mx-auto px-4 py-4">
@@ -198,39 +203,58 @@ const MyModules = () => {
               )}
 
               {activeTab === 'completed' && (
-                <div>
-                  {Object.keys(groupedCompletedModules).length > 0 ? (
-                    Object.keys(groupedCompletedModules).map(academicYear => (
-                      <div key={academicYear} className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">{academicYear}</h2>
-                        {Object.keys(groupedCompletedModules[academicYear]).map(yearOfStudy => (
-                          <div key={yearOfStudy} className="mb-6">
-                            <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-3">{yearOfStudy}</h3>
-                            {Object.keys(groupedCompletedModules[academicYear][yearOfStudy]).map(semester => (
-                              <div key={semester} className="mb-4">
-                                <h4 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">{semester}</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                  {groupedCompletedModules[academicYear][yearOfStudy][semester].map((module, i) => (
-                                    <motion.div
-                                      key={module.module_id}
-                                      custom={i}
-                                      variants={cardVariants}
-                                      initial="hidden"
-                                      animate="visible"
-                                    >
-                                      <ModuleCard 
-                                        module={module} 
-                                        completed={true}
-                                        openDropdown={openDropdown}
-                                        onDropdownClick={handleDropdownClick}
-                                      />
-                                    </motion.div>
-                                  ))}
+                <div className="space-y-8">
+                  {sortedYears.length > 0 ? (
+                    sortedYears.map((year, yearIndex) => (
+                      <div key={year} className="space-y-4">
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white pl-1 border-l-4 border-primary/50">
+                          {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
+                        </h2>
+                        
+                        {Object.keys(groupedCompletedModules[year])
+                          .sort((a, b) => {
+                             if (a === 'Unknown Semester') return 1;
+                             if (b === 'Unknown Semester') return -1;
+                             return a - b;
+                          })
+                          .map((semester, semIndex) => (
+                            <CollapsibleSection 
+                              key={`${year}-${semester}`} 
+                              title={
+                                <div className="flex items-center gap-3">
+                                  <span className="text-muted-foreground font-medium">
+                                    {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
+                                  </span>
+                                  <span className="bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold text-primary">
+                                    {groupedCompletedModules[year][semester].length} Modules
+                                  </span>
                                 </div>
+                              }
+                              defaultOpen={yearIndex === sortedYears.length - 1}
+                            >
+                              <div className="pt-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {groupedCompletedModules[year][semester].map((module, i) => (
+                                      <motion.div
+                                        key={module.module_id}
+                                        custom={i}
+                                        variants={cardVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        className="h-full"
+                                      >
+                                        <ModuleCard 
+                                          module={module} 
+                                          completed={true}
+                                          openDropdown={openDropdown}
+                                          onDropdownClick={handleDropdownClick}
+                                        />
+                                      </motion.div>
+                                    ))}
+                                  </div>
                               </div>
-                            ))}
-                          </div>
-                        ))}
+                            </CollapsibleSection>
+                          ))}
                       </div>
                     ))
                   ) : (
