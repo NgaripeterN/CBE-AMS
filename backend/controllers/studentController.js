@@ -549,7 +549,18 @@ const getMyModules = async (req, res) => {
       where: { student_id: studentId },
     });
 
-    const modules = enrollments.map((e) => e.module);
+    // Fetch micro-credentials to determine completion status
+    const microCredentials = await prisma.microCredential.findMany({
+      where: { student_id: studentId },
+      select: { module_id: true },
+    });
+
+    const completedModuleIds = new Set(microCredentials.map(mc => mc.module_id));
+
+    const modules = enrollments.map((e) => ({
+      ...e.module,
+      completed: completedModuleIds.has(e.module.module_id),
+    }));
 
     res.json({
       modules,
