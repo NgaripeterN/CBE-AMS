@@ -56,32 +56,26 @@ const Wallet = () => {
 
   const { microCredentials, courseCredentials } = walletData;
 
-  // Group micro-credentials by Year and Semester
-  const groupedMicroCredentials = microCredentials.reduce((acc, cred) => {
+  // Group micro-credentials by Year, then Semester
+  const groupedByYear = microCredentials.reduce((acc, cred) => {
     const year = cred.module?.yearOfStudy || 'Unknown Year';
     const semester = cred.module?.semesterOfStudy || 'Unknown Semester';
-    const key = `${year}-${semester}`;
 
-    if (!acc[key]) {
-      acc[key] = {
-        year,
-        semester,
-        credentials: [],
-      };
+    if (!acc[year]) {
+      acc[year] = {};
     }
-    acc[key].credentials.push(cred);
+    if (!acc[year][semester]) {
+      acc[year][semester] = [];
+    }
+    acc[year][semester].push(cred);
     return acc;
   }, {});
 
-  // Sort groups: Years ascending, then Semesters ascending. Unknowns at the end.
-  const sortedGroups = Object.values(groupedMicroCredentials).sort((a, b) => {
-    if (a.year === 'Unknown Year') return 1;
-    if (b.year === 'Unknown Year') return -1;
-    if (a.year !== b.year) return a.year - b.year;
-    
-    if (a.semester === 'Unknown Semester') return 1;
-    if (b.semester === 'Unknown Semester') return -1;
-    return a.semester - b.semester;
+  // Sort Years
+  const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
+    if (a === 'Unknown Year') return 1;
+    if (b === 'Unknown Year') return -1;
+    return a - b;
   });
 
   const containerVariants = {
@@ -133,41 +127,53 @@ const Wallet = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-8"
             >
-              {sortedGroups.length > 0 ? (
-                sortedGroups.map((group, index) => (
-                  <CollapsibleSection 
-                    key={`${group.year}-${group.semester}`} 
-                    title={
-                      <div className="flex items-center gap-2">
-                        <span className="bg-primary/10 px-2 py-1 rounded text-primary text-sm font-medium">
-                          {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
-                        </span>
-                        {group.semester !== 'Unknown Semester' && (
-                          <span className="text-muted-foreground text-sm">
-                            Semester {group.semester}
-                          </span>
-                        )}
-                      </div>
-                    }
-                    defaultOpen={index === sortedGroups.length - 1}
-                  >
-                    <div className="pt-4">
-                        <motion.div 
-                          className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-                          variants={containerVariants}
-                          initial="hidden"
-                          animate="visible"
-                        >
-                          {group.credentials.map((credential) => (
-                            <motion.div key={credential.id} variants={containerVariants} className="h-full">
-                              <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
+              {sortedYears.length > 0 ? (
+                sortedYears.map((year, yearIndex) => (
+                  <div key={year} className="space-y-4">
+                    <h3 className="text-2xl font-bold text-foreground pl-1 border-l-4 border-primary/50">
+                      {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
+                    </h3>
+                    
+                    {Object.keys(groupedByYear[year])
+                      .sort((a, b) => {
+                         if (a === 'Unknown Semester') return 1;
+                         if (b === 'Unknown Semester') return -1;
+                         return a - b;
+                      })
+                      .map((semester, semIndex) => (
+                      <CollapsibleSection 
+                        key={`${year}-${semester}`} 
+                        title={
+                          <div className="flex items-center gap-2">
+                             <span className="text-muted-foreground font-medium">
+                               {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
+                             </span>
+                             <span className="bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold text-primary">
+                               {groupedByYear[year][semester].length} Credentials
+                             </span>
+                          </div>
+                        }
+                        defaultOpen={yearIndex === sortedYears.length - 1} // Open semesters of the latest year by default
+                      >
+                        <div className="pt-4">
+                            <motion.div 
+                              className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                              variants={containerVariants}
+                              initial="hidden"
+                              animate="visible"
+                            >
+                              {groupedByYear[year][semester].map((credential) => (
+                                <motion.div key={credential.id} variants={containerVariants} className="h-full">
+                                  <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
+                                </motion.div>
+                              ))}
                             </motion.div>
-                          ))}
-                        </motion.div>
-                    </div>
-                  </CollapsibleSection>
+                        </div>
+                      </CollapsibleSection>
+                    ))}
+                  </div>
                 ))
               ) : (
                 <div className="col-span-full text-center py-16 border-2 border-dashed border-muted-foreground/20 rounded-lg">

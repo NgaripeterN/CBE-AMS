@@ -32,32 +32,26 @@ const MyModulesPage = () => {
   const activeModules = modules.filter(m => !m.completed);
   const completedModules = modules.filter(m => m.completed);
 
-  // Group completed modules by Year and Semester
-  const groupedCompletedModules = completedModules.reduce((acc, module) => {
+  // Group completed modules by Year, then Semester
+  const groupedByYear = completedModules.reduce((acc, module) => {
     const year = module.yearOfStudy || 'Unknown Year';
     const semester = module.semesterOfStudy || 'Unknown Semester';
-    const key = `${year}-${semester}`;
 
-    if (!acc[key]) {
-      acc[key] = {
-        year,
-        semester,
-        modules: [],
-      };
+    if (!acc[year]) {
+      acc[year] = {};
     }
-    acc[key].modules.push(module);
+    if (!acc[year][semester]) {
+      acc[year][semester] = [];
+    }
+    acc[year][semester].push(module);
     return acc;
   }, {});
 
-  // Sort groups: Years ascending, then Semesters ascending
-  const sortedCompletedGroups = Object.values(groupedCompletedModules).sort((a, b) => {
-    if (a.year === 'Unknown Year') return 1;
-    if (b.year === 'Unknown Year') return -1;
-    if (a.year !== b.year) return a.year - b.year;
-    
-    if (a.semester === 'Unknown Semester') return 1;
-    if (b.semester === 'Unknown Semester') return -1;
-    return a.semester - b.semester;
+  // Sort Years
+  const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
+    if (a === 'Unknown Year') return 1;
+    if (b === 'Unknown Year') return -1;
+    return a - b;
   });
 
   const modulesToShow = activeTab === 'active' ? activeModules : completedModules;
@@ -160,62 +154,74 @@ const MyModulesPage = () => {
           )}
 
           {activeTab === 'completed' && (
-            <div className="space-y-6">
-              {sortedCompletedGroups.length > 0 ? (
-                sortedCompletedGroups.map((group, index) => (
-                  <CollapsibleSection 
-                    key={`${group.year}-${group.semester}`} 
-                    title={
-                      <div className="flex items-center gap-3">
-                        <span className="bg-primary/10 px-4 py-2 rounded-xl text-primary font-bold">
-                          {group.year === 'Unknown Year' ? 'Other' : `Year ${group.year}`}
-                        </span>
-                        {group.semester !== 'Unknown Semester' && (
-                          <span className="text-muted-foreground font-medium">
-                            • Semester {group.semester}
-                          </span>
-                        )}
-                      </div>
-                    }
-                    defaultOpen={index === sortedCompletedGroups.length - 1}
-                  >
-                    <div className="pt-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                          {group.modules.map((module, i) => (
-                            <motion.div
-                              key={module.module_id}
-                              custom={i}
-                              variants={cardVariants}
-                              initial="hidden"
-                              animate="visible"
-                              className="h-full"
-                            >
-                              <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
-                                <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
-                                  <div className="p-8 flex-grow">
-                                    <div className="flex justify-between items-start mb-4">
-                                      <span className="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
-                                        Completed
-                                      </span>
-                                      <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                                    </div>
-                                    <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
-                                      {module.title}
-                                    </h2>
-                                    <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
-                                  </div>
-                                  <div className="px-8 pb-8">
-                                    <div className="w-full text-center px-4 py-3 bg-secondary text-secondary-foreground rounded-xl font-bold shadow-sm group-hover:bg-secondary/90 transition-colors">
-                                      View Details
-                                    </div>
-                                  </div>
-                                </a>
-                              </Link>
-                            </motion.div>
-                          ))}
+            <div className="space-y-12">
+              {sortedYears.length > 0 ? (
+                sortedYears.map((year, yearIndex) => (
+                  <div key={year} className="space-y-4">
+                    <h3 className="text-2xl font-bold text-foreground pl-1 border-l-4 border-primary/50">
+                      {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
+                    </h3>
+
+                    {Object.keys(groupedByYear[year])
+                      .sort((a, b) => {
+                         if (a === 'Unknown Semester') return 1;
+                         if (b === 'Unknown Semester') return -1;
+                         return a - b;
+                      })
+                      .map((semester, semIndex) => (
+                      <CollapsibleSection 
+                        key={`${year}-${semester}`} 
+                        title={
+                          <div className="flex items-center gap-3">
+                            <span className="text-muted-foreground font-medium">
+                              {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
+                            </span>
+                            <span className="bg-primary/10 px-2 py-0.5 rounded text-xs font-semibold text-primary">
+                              {groupedByYear[year][semester].length} Modules
+                            </span>
+                          </div>
+                        }
+                        defaultOpen={yearIndex === sortedYears.length - 1} // Open semesters of the latest year by default
+                      >
+                        <div className="pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                              {groupedByYear[year][semester].map((module, i) => (
+                                <motion.div
+                                  key={module.module_id}
+                                  custom={i}
+                                  variants={cardVariants}
+                                  initial="hidden"
+                                  animate="visible"
+                                  className="h-full"
+                                >
+                                  <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
+                                    <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
+                                      <div className="p-8 flex-grow">
+                                        <div className="flex justify-between items-start mb-4">
+                                          <span className="px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
+                                            Completed
+                                          </span>
+                                          <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                                        </div>
+                                        <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
+                                          {module.title}
+                                        </h2>
+                                        <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
+                                      </div>
+                                      <div className="px-8 pb-8">
+                                        <div className="w-full text-center px-4 py-3 bg-secondary text-secondary-foreground rounded-xl font-bold shadow-sm group-hover:bg-secondary/90 transition-colors">
+                                          View Details
+                                        </div>
+                                      </div>
+                                    </a>
+                                  </Link>
+                                </motion.div>
+                              ))}
+                            </div>
                         </div>
-                    </div>
-                  </CollapsibleSection>
+                      </CollapsibleSection>
+                    ))}
+                  </div>
                 ))
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">
