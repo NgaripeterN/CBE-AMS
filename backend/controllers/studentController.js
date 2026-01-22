@@ -741,6 +741,150 @@ const markNotificationAsRead = async (req, res) => {
   }
 };
 
+const generateTranscript = async (req, res) => {
+    const { userId } = req.user;
+    const { year: requestedYear, format } = req.query; // Get year and format from query parameter
+    const studentId = await getStudentId(userId);
+    if (!studentId) {
+        return res.status(404).json({ error: 'Student profile not found' });
+    }
+
+    try {
+        const studentDetails = await prisma.student.findUnique({
+            where: { id: studentId },
+            include: { user: true },
+        });
+
+        // Fetch all micro-credentials for the student
+        let microCredentials = await prisma.microCredential.findMany({
+            where: { student_id: studentId, status: 'ISSUED' },
+            include: {
+                module: {
+                    select: {
+                        title: true,
+                        moduleCode: true,
+                        yearOfStudy: true,
+                    },
+                },
+            },
+            orderBy: {
+                issuedAt: 'asc',
+            },
+        });
+
+        // Filter micro-credentials by requested year if provided
+        if (requestedYear) {
+            microCredentials = microCredentials.filter(mc =>
+                mc.module.yearOfStudy && String(mc.module.yearOfStudy) === String(requestedYear)
+            );
+        }
+
+        // Fetch all course credentials for the student
+        let courseCredentials = await prisma.courseCredential.findMany({
+            where: { student_id: studentId, status: 'ISSUED' },
+            include: {
+                course: {
+                    select: {
+                        name: true,
+                        code: true,
+                    },
+                },
+            },
+            orderBy: {
+                issuedAt: 'asc',
+            },
+        });
+
+        const transcriptData = {
+            student: {
+                name: studentDetails.user.name,
+                email: studentDetails.user.email,
+                regNumber: studentDetails.user.regNumber,
+                program: studentDetails.user.program, // Include program from user
+            },
+            yearlySummary: {},
+            courseSummaries: [],
+        };
+
+        // Process Micro-Credentials
+        microCredentials.forEach(mc => {
+            const year = mc.module.yearOfStudy || 'General';
+            // Only add to yearly summary if it's the requested year OR no year was requested
+            if (!requestedYear || String(year) === String(requestedYear)) {
+                if (!transcriptData.yearlySummary[year]) {
+                    transcriptData.yearlySummary[year] = { modules: [], totalScore: 0, count: 0 };
+                }
+                transcriptData.yearlySummary[year].modules.push({
+                    moduleCode: mc.module.moduleCode,
+                    moduleTitle: mc.module.title,
+                    score: mc.score,
+                    descriptor: mc.descriptor,
+                    issuedAt: mc.issuedAt,
+                });
+                transcriptData.yearlySummary[year].totalScore += mc.score;
+                transcriptData.yearlySummary[year].count += 1;
+            }
+        });
+
+        // Calculate yearly averages for micro-credentials
+        for (const year in transcriptData.yearlySummary) {
+            if (transcriptData.yearlySummary[year].count > 0) {
+                transcriptData.yearlySummary[year].averageScore = (transcriptData.yearlySummary[year].totalScore / transcriptData.yearlySummary[year].count).toFixed(2);
+            } else {
+                transcriptData.yearlySummary[year].averageScore = 'N/A';
+            }
+            delete transcriptData.yearlySummary[year].totalScore;
+            delete transcriptData.yearlySummary[year].count;
+        }
+
+        // Process Course-Credentials
+        courseCredentials.forEach(cc => {
+            const payloadJson = typeof cc.payloadJson === 'string' ? JSON.parse(cc.payloadJson) : cc.payloadJson;
+
+            // Filter course's internal transcript by requestedYear if applicable
+            let filteredCourseTranscript = payloadJson.credentialSubject?.transcript;
+            if (requestedYear && filteredCourseTranscript) {
+                filteredCourseTranscript = filteredCourseTranscript.filter(t => String(t.year) === String(requestedYear));
+            }
+
+            // Only include course summary if it either has no requestedYear or has matching transcript data for the requestedYear
+            if (!requestedYear || (filteredCourseTranscript && filteredCourseTranscript.length > 0)) {
+                transcriptData.courseSummaries.push({
+                    courseCode: cc.course.code,
+                    courseName: cc.course.name,
+                    overallScore: payloadJson.credentialSubject?.score,
+                    overallDescriptor: payloadJson.credentialSubject?.descriptor,
+                    transcript: filteredCourseTranscript, // Use filtered transcript
+                    evidenceModules: payloadJson.credentialSubject?.evidenceModules, // Modules with names
+                    demonstratedCompetencies: payloadJson.credentialSubject?.demonstratedCompetencies,
+                    issuedAt: cc.issuedAt,
+                });
+            }
+        });
+
+        // If a specific year was requested, and there's no data for it, return an empty response or a specific message
+        if (requestedYear && Object.keys(transcriptData.yearlySummary).length === 0 && transcriptData.courseSummaries.length === 0) {
+            return res.status(404).json({ message: `No transcript data found for year ${requestedYear}.` });
+        }
+        
+        // PDF generation logic
+        if (format === 'pdf') {
+            const { generatePdfTranscript } = require('../lib/pdfGenerator');
+            const pdfBuffer = await generatePdfTranscript(transcriptData);
+
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="Transcript_${requestedYear ? `Year_${requestedYear}_` : ''}${studentDetails.user.name || 'Student'}.pdf"`);
+            return res.send(pdfBuffer);
+        }
+
+        res.json(transcriptData);
+
+    } catch (error) {
+        console.error('Error generating transcript:', error);
+        res.status(500).json({ error: 'An error occurred while generating the transcript' });
+    }
+};
+
 module.exports = {
   getDashboard,
   getWallet,
@@ -759,4 +903,5 @@ module.exports = {
   markAllNotificationsAsRead,
   markNotificationAsRead,
   getUpcomingAssessments,
+  generateTranscript,
 };

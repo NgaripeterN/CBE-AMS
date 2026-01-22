@@ -175,7 +175,7 @@ const AssessorLayout = ({ children }) => {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex md:flex-col bg-card shadow-md border-r border-border transition-all duration-300 ease-in-out ${
+      <aside className={`hidden md:flex md:flex-col bg-card shadow-md border-r border-border transition-all duration-300 ease-in-out sticky top-0 h-screen ${
         isSidebarCollapsed ? 'md:w-20' : 'md:w-64'
       }`}>
         <SidebarContent />

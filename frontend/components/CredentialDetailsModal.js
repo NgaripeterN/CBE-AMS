@@ -21,10 +21,12 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
     else description = payload.credentialSubject?.moduleTitle || payload.credentialSubject?.courseTitle || 'No description available.';
   }
 
+  const transcript = payload.credentialSubject?.transcript;
+  const evidenceModules = payload.credentialSubject?.evidenceModules;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
-      <div className="bg-card text-foreground rounded-lg p-6 max-w-3xl w-full shadow-2xl">
+      <div className="bg-card text-foreground rounded-lg p-6 max-w-4xl w-full shadow-2xl overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center mb-4 border-b border-border pb-3">
           <h2 className="text-2xl font-bold text-primary">{payload.badge?.name || payload.credentialSubject?.moduleTitle || payload.credentialSubject?.courseTitle || 'Untitled Credential'}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">&times;</button>
@@ -55,6 +57,30 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
               </div>
             )}
           </div>
+
+          {transcript && transcript.length > 0 && (
+            <div className="border-t border-border pt-4">
+              <h3 className="font-semibold text-lg mb-2">Transcript</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {transcript.map((item, index) => (
+                  <div key={index} className="p-2 bg-muted rounded-md">
+                    <p><strong>Year {item.year}:</strong> <span className="font-mono">{item.score}%</span></p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {evidenceModules && evidenceModules.length > 0 && (
+            <div className="border-t border-border pt-4">
+              <h3 className="font-semibold text-lg mb-2">Evidence Modules</h3>
+              <ul className="list-disc pl-5">
+                {evidenceModules.map((module, index) => (
+                  <li key={index}>{module.title}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end">

@@ -8,6 +8,7 @@ import {
   HomeIcon,
   BookOpenIcon,
   InboxIcon,
+  DocumentTextIcon, // Added DocumentTextIcon
   CreditCardIcon,
   KeyIcon,
   ArrowLeftOnRectangleIcon,
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/student', label: 'Home', icon: HomeIcon },
   { href: '/student/my-modules', label: 'My Modules', icon: BookOpenIcon },
   { href: '/student/submissions', label: 'Submissions', icon: InboxIcon },
+  { href: '/student/transcript', label: 'Transcript', icon: DocumentTextIcon }, // Added Transcript Item
   { href: '/student/wallet', label: 'Wallet', icon: CreditCardIcon },
   { href: '/change-password', label: 'Change Password', icon: KeyIcon },
 ];
@@ -101,7 +103,7 @@ const StudentLayout = ({ children }) => {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex md:flex-col bg-card shadow-md border-r border-border transition-all duration-300 ease-in-out ${
+      <aside className={`hidden md:flex md:flex-col bg-card shadow-md border-r border-border transition-all duration-300 ease-in-out sticky top-0 h-screen ${
         isSidebarCollapsed ? 'md:w-20' : 'md:w-64'
       }`}>
         <SidebarContent />

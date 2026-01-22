@@ -9,7 +9,10 @@ import {
   CheckCircleIcon, 
   XCircleIcon, 
   DocumentCheckIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  BookOpenIcon, // Added
+  DocumentTextIcon, // Added
+  CogIcon // Added
 } from '@heroicons/react/24/outline';
 
 const VerificationResult = ({ result }) => {
@@ -17,6 +20,12 @@ const VerificationResult = ({ result }) => {
 
     const { payload, verificationResult } = result;
     const { isValid, reason, issuerAddress, timestamp } = verificationResult;
+
+    const score = payload.credentialSubject?.score || payload.result?.score;
+    const descriptor = payload.credentialSubject?.descriptor || payload.result?.descriptor;
+    const transcript = payload.credentialSubject?.transcript;
+    const evidenceModules = payload.credentialSubject?.evidenceModules;
+    const demonstratedCompetencies = payload.credentialSubject?.demonstratedCompetencies;
 
     return (
         <div className={`mt-8 overflow-hidden rounded-xl border shadow-lg transition-all duration-300 ${isValid ? 'border-green-500/50 bg-green-50/50 dark:bg-green-900/10' : 'border-red-500/50 bg-red-50/50 dark:bg-red-900/10'}`}>
@@ -57,6 +66,18 @@ const VerificationResult = ({ result }) => {
                             <dt className="text-muted-foreground">Title</dt>
                             <dd className="font-medium text-foreground">{payload.badge?.name || 'Not available'}</dd>
                         </div>
+                        {score && (
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Score</dt>
+                                <dd className="font-medium text-foreground">{score.toFixed(2)}%</dd>
+                            </div>
+                        )}
+                        {descriptor && (
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Descriptor</dt>
+                                <dd className="font-medium text-foreground">{descriptor}</dd>
+                            </div>
+                        )}
                     </dl>
                 </div>
 
@@ -81,6 +102,52 @@ const VerificationResult = ({ result }) => {
                     </dl>
                 </div>
             </div>
+
+            {transcript && transcript.length > 0 && (
+                <div className="border-t border-border pt-4 p-6">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                        <BookOpenIcon className="h-5 w-5 text-primary" />
+                        Transcript
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                        {transcript.map((item, index) => (
+                            <div key={index} className="bg-muted/50 p-3 rounded-md">
+                                <p><strong>Year {item.year}:</strong> <span className="font-mono">{item.score}%</span></p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {evidenceModules && evidenceModules.length > 0 && (
+                <div className="border-t border-border pt-4 p-6">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                        <DocumentTextIcon className="h-5 w-5 text-primary" />
+                        Evidence Modules
+                    </h3>
+                    <ul className="list-disc pl-5 text-sm space-y-1">
+                        {evidenceModules.map((module, index) => (
+                            <li key={index} className="text-foreground">{module.title}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {demonstratedCompetencies && demonstratedCompetencies.length > 0 && (
+                <div className="border-t border-border pt-4 p-6">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                        <CogIcon className="h-5 w-5 text-primary" />
+                        Demonstrated Competencies
+                    </h3>
+                    <div className="flex flex-wrap gap-2 text-sm">
+                        {demonstratedCompetencies.map((comp, index) => (
+                            <span key={index} className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-xs font-medium">
+                                {comp.name}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {isValid && (
                 <div className="bg-muted/30 p-4 border-t border-border text-xs text-muted-foreground flex flex-col md:flex-row justify-between gap-2">
@@ -152,7 +219,7 @@ const VerifyCredential = () => {
         
         <main className="flex-grow max-w-4xl mx-auto px-6 py-12 w-full">
             <div className="text-center space-y-4 mb-12">
-                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent pb-2">
+                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground pb-2">
                     Verify Authenticity
                 </h2>
                 <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">

@@ -1,0 +1,99 @@
+{
+  "student": {
+    "name": "Timon Omondi",
+    "email": "omondi.timon@example.com",
+    "regNumber": "CSE12347",
+    "program": "Information Technology Fundamentals"
+  },
+  "yearlySummary": {
+    "1": {
+      "modules": [
+        {
+          "moduleCode": "CCS1101",
+          "moduleTitle": "Computer Networks",
+          "score": 70,
+          "descriptor": "ME",
+          "issuedAt": "2026-01-22T10:24:16.068Z"
+        },
+        {
+          "moduleCode": "CCS1201",
+          "moduleTitle": "Operating systems",
+          "score": 84,
+          "descriptor": "EE",
+          "issuedAt": "2026-01-22T10:24:40.327Z"
+        }
+      ],
+      "averageScore": "77.00"
+    }
+  },
+  "courseSummaries": [
+    {
+      "courseCode": "CS101",
+      "courseName": "Bsc. Computer Science",
+      "overallScore": 79.5,
+      "overallDescriptor": "ME",
+      "transcript": [
+        {
+          "year": "1",
+          "score": "77.00"
+        }
+      ],
+      "evidenceModules": [
+        {
+          "id": "cmkp9mdbv001uo05k4g9p5lub",
+          "title": "Computer Networks"
+        },
+        {
+          "id": "cmkp9nxip001vo05kt8aqe0dg",
+          "title": "Operating systems"
+        },
+        {
+          "id": "cmkp9pj6i001wo05k07yxxf8c",
+          "title": "Programming Languages"
+        },
+        {
+          "id": "cmkp9qp1a001xo05kmm57pe7d",
+          "title": "Data Structures and Algorithms"
+        }
+      ],
+      "demonstratedCompetencies": [
+        {
+          "id": "cmkp98s3l000ko05ky2czzkb8",
+          "name": "Memory Management Awareness",
+          "description": "Understanding how memory is allocated and managed during program execution."
+        },
+        {
+          "id": "cmkp98s3u000lo05kz707w1e6",
+          "name": "Process and Thread Reasoning",
+          "description": "Understanding concurrent execution using processes and threads."
+        },
+        {
+          "id": "cmkp98s46000mo05kqyf067t1",
+          "name": "File System Interaction",
+          "description": "Ability to work with files and directories programmatically and at OS level."
+        },
+        {
+          "id": "cmkp98rv80004o05ktnagem2i",
+          "name": "Programming Basics",
+          "description": "Ability to write basic programs using variables, control structures, and functions."
+        },
+        {
+          "id": "cmkp98s26000go05kizb846g5",
+          "name": "Problem Decomposition",
+          "description": "Ability to break complex problems into manageable components."
+        },
+        {
+          "id": "cmkp98rtr0003o05k1jql6dg9",
+          "name": "Algorithmic Thinking",
+          "description": "Ability to reason step-by-step to design correct and efficient algorithms."
+        },
+        {
+          "id": "cmkp98s2y000io05ki5ukrqv3",
+          "name": "Algorithm Efficiency Analysis",
+          "description": "Ability to reason about time and space complexity of algorithms."
+        }
+      ],
+      "issuedAt": "2026-01-22T10:26:17.454Z"
+    }
+  ]
+}

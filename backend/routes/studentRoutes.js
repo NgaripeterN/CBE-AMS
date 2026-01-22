@@ -18,6 +18,7 @@ const {
   markNotificationAsRead,
   getMyObservations,
   getUpcomingAssessments,
+  generateTranscript, // Added for the new feature
 } = require('../controllers/studentController');
 const { isAuthenticated } = require('../middleware/isAuthenticated');
 const studentOnly = require('../middleware/studentOnly');
@@ -48,5 +49,10 @@ router.post('/notifications/:id/mark-as-read', markNotificationAsRead);
 // @route   GET /api/student/my-observations
 // @access  Private (Student)
 router.get('/my-observations', getMyObservations);
+
+// @desc    Generate and download student transcript
+// @route   GET /api/student/transcript
+// @access  Private (Student)
+router.get('/transcript', generateTranscript);
 
 module.exports = router;

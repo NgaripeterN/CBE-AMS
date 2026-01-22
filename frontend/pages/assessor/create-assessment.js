@@ -700,7 +700,7 @@ const CreateAssessment = () => {
                         Back
                     </button>
                     <h1 className="text-3xl font-bold text-foreground">Create New Assessment</h1>
-                    <p className="text-muted-foreground mt-1">For module: <span className="font-semibold text-primary-foreground">{moduleTitle}</span></p>
+                    <p className="text-muted-foreground mt-1">For module: <span className="font-semibold text-foreground">{moduleTitle}</span></p>
                 </header>
                 
                 <AnimatePresence mode="wait">

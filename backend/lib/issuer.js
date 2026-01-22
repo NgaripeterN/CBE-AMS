@@ -211,12 +211,26 @@ async function checkAndIssueCourseCredential(student_id, course_id) { // This fu
   const earnedModuleIds = new Set();
   const evidenceMicroCredentialIds = [];
   let totalScore = 0;
+  const yearScores = {};
+  const evidenceModules = [];
 
   for (const cred of studentCredentials) {
     if (requiredModules.includes(cred.module_id) && cred.status === 'ISSUED') {
       earnedModuleIds.add(cred.module_id);
       evidenceMicroCredentialIds.push(cred.id);
       totalScore += cred.score;
+
+      const year = cred.module.yearOfStudy || 'General';
+      if (!yearScores[year]) {
+        yearScores[year] = { totalScore: 0, count: 0 };
+      }
+      yearScores[year].totalScore += cred.score;
+      yearScores[year].count += 1;
+
+      evidenceModules.push({
+        id: cred.module.module_id,
+        title: cred.module.title,
+      });
     }
   }
 
@@ -227,6 +241,10 @@ async function checkAndIssueCourseCredential(student_id, course_id) { // This fu
 
     const averageScore = totalScore / requiredModules.length;
     const courseDescriptor = getDescriptor(averageScore);
+    const transcript = Object.keys(yearScores).map(year => ({
+        year,
+        score: (yearScores[year].totalScore / yearScores[year].count).toFixed(2),
+    }));
 
     // Aggregate demonstrated competencies from the micro-credentials that contributed to this course credential
     const allCourseDemonstratedCompetencies = studentCredentials.flatMap(mc =>
@@ -241,7 +259,8 @@ async function checkAndIssueCourseCredential(student_id, course_id) { // This fu
         score: averageScore, // Use averageScore for course
         descriptor: courseDescriptor, // Use courseDescriptor for course
         demonstratedCompetencies: uniqueCourseCompetencies,
-        evidenceModuleIds: requiredModules,
+        evidenceModules: evidenceModules,
+        transcript: transcript,
     });
 
     const canonicalizedPayload = stringify(payload);
@@ -283,7 +302,7 @@ async function checkAndIssueCourseCredential(student_id, course_id) { // This fu
 
 
 credentialIssuanceQueue.process(async (job) => {
-  const { student_id, module_id, course_id, type, score, descriptor, demonstratedCompetencies, evidenceModuleIds } = job.data;
+  const { student_id, module_id, course_id, type, score, descriptor, demonstratedCompetencies, evidenceModules, transcript } = job.data;
 
   try {
     const student = await prisma.student.findUnique({
@@ -359,7 +378,8 @@ credentialIssuanceQueue.process(async (job) => {
             score, // Score here would be the average score calculated in checkAndIssueCourseCredential
             descriptor,
             demonstratedCompetencies, // Aggregated competencies
-            evidenceModuleIds,
+            evidenceModules,
+            transcript,
         });
 
         const canonicalizedPayload = stringify(payload);
@@ -381,7 +401,8 @@ credentialIssuanceQueue.process(async (job) => {
             },
             data: {
                 descriptor,
-                evidenceModuleIds,
+                evidenceModuleIds: evidenceModules.map(m => m.id),
+                transcript,
                 issuedAt: new Date(),
                 payloadJson: payload,
                 txHash: tx.hash,
@@ -411,8 +432,8 @@ const issueCredential = async (student_id, module_id, type, score, descriptor, d
   await credentialIssuanceQueue.add({ student_id, module_id, type, score, descriptor, demonstratedCompetencies });
 };
 
-const issueCourseCredential = async (student_id, course_id, descriptor, demonstratedCompetencies, evidenceModuleIds) => {
-    await credentialIssuanceQueue.add({ student_id, course_id, descriptor, demonstratedCompetencies, evidenceModuleIds, type: 'COURSE_CREDENTIAL' });
+const issueCourseCredential = async (student_id, course_id, descriptor, demonstratedCompetencies, evidenceModules, transcript) => {
+    await credentialIssuanceQueue.add({ student_id, course_id, descriptor, demonstratedCompetencies, evidenceModules, transcript, type: 'COURSE_CREDENTIAL' });
 };
 
 module.exports = {

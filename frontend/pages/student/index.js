@@ -5,6 +5,7 @@ import StudentCalendar from '../../components/Student/Dashboard/Calendar';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import useAuth from '../../hooks/useAuth';
+import toast from 'react-hot-toast';
 
 const StudentDashboard = () => {
   const { user, loading } = useAuth();
@@ -24,6 +25,7 @@ const StudentDashboard = () => {
 
       } catch (err) {
         setError('Failed to fetch dashboard data.');
+        toast.error('Failed to load some dashboard data.');
       }
     };
     fetchDashboardData();

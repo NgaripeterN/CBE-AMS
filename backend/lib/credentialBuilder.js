@@ -10,6 +10,8 @@ const buildCredentialPayload = ({
     descriptor,
     demonstratedCompetencies,
     evidenceModuleIds, // for course-credential
+    evidenceModules,
+    transcript,
 }) => {
     const uniqueDemonstratedCompetencies = Array.from(new Map(demonstratedCompetencies.map(comp => [comp.id, comp])).values());
 
@@ -87,7 +89,8 @@ const buildCredentialPayload = ({
                 "courseCode": course.code,
                 "courseTitle": course.name,
                 "courseDescription": course.description,
-                "evidenceModuleIds": evidenceModuleIds,
+                "evidenceModules": evidenceModules,
+                "transcript": transcript,
             },
             "recipient": recipient,
             "badge": {
