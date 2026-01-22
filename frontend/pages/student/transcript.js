@@ -161,7 +161,7 @@ const TranscriptPage = () => {
         </div>
 
         <div className="mt-8 border-t border-border pt-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">What's included in the transcript?</h3>
+            <h3 className="text-lg font-medium text-foreground mb-4">What&apos;s included in the transcript?</h3>
             <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
                 <li>Detailed module scores and descriptors.</li>
                 <li>Overall course performance and demonstrated competencies.</li>
