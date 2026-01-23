@@ -49,7 +49,7 @@ const ModulePage = () => {
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <button
         onClick={goBack}
-        className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
       >
         <ArrowLeftIcon className="h-5 w-5 mr-2" />
         Back

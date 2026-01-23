@@ -26,7 +26,7 @@ export default function OnboardingNav() {
               <Link
                 key={link.name}
                 href={link.href}
-                className="text-sm px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white"
+                className="text-sm px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-white"
               >
                 {link.name}
               </Link>
@@ -36,7 +36,7 @@ export default function OnboardingNav() {
         
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/login" className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium shadow hover:bg-indigo-700 transition">
+            <Link href="/login" className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow hover:bg-primary/90 transition">
               Login
             </Link>
             <ThemeSwitcher />
@@ -84,7 +84,7 @@ export default function OnboardingNav() {
                 <Link
                   href="/login"
                   onClick={() => setIsOpen(false)}
-                  className="block text-center text-base font-medium px-3 py-3 rounded-md bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 transition"
+                  className="block text-center text-base font-medium px-3 py-3 rounded-md bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition"
                 >
                   Login
                 </Link>

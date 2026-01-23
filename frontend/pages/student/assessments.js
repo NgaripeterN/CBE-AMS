@@ -57,7 +57,7 @@ const AssessmentsPage = () => {
         <header className="mb-8">
             <button
                 onClick={goBack}
-                className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
                 <ArrowLeftIcon className="h-5 w-5 mr-2" />
                 Back
@@ -79,7 +79,7 @@ const AssessmentsPage = () => {
                   <a className="block p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 ease-in-out">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wider">
+                        <p className="text-sm font-semibold text-primary uppercase tracking-wider">
                           {assessment.module.title}
                         </p>
                         <h2 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">

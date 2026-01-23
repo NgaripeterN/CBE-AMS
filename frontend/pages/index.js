@@ -43,14 +43,14 @@ export default function OnboardingPage() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-4">
                   <button
                     onClick={handleGetStarted}
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700 transition w-full sm:w-auto"
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold shadow hover:bg-primary/90 transition w-full sm:w-auto"
                   >
                     Get started
                   </button>
 
                   <Link
                     href="/about"
-                    className="inline-flex items-center justify-center px-5 py-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition w-full sm:w-auto"
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-card border-2 border-primary dark:border-slate-500 text-primary dark:text-white font-semibold shadow-md hover:bg-green-600 hover:border-green-600 hover:text-white transition w-full sm:w-auto"
                   >
                     Learn more
                   </Link>

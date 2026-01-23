@@ -82,7 +82,7 @@ export default function Docs() {
                     key={key}
                     onClick={() => setActiveSection(key)}
                     className={`text-left px-4 py-2 rounded-md text-sm font-medium transition ${activeSection === key
-                      ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                      ? "bg-primary/10 text-primary dark:bg-primary/20"
                       : "hover:bg-gray-100 dark:hover:bg-slate-800"}`}>
                     {sections[key].title}
                   </button>

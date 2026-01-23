@@ -97,7 +97,7 @@ const SubmissionsPage = () => {
                   className="flex items-center justify-between w-full text-left text-3xl font-bold text-gray-800 dark:text-white group"
                 >
                   <span>{year}</span>
-                  <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-indigo-600 ${expanded[year] ? 'rotate-180' : ''}`} />
+                  <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-primary ${expanded[year] ? 'rotate-180' : ''}`} />
                 </button>
                 {expanded[year] && (
                   <div className="mt-4 space-y-4">
@@ -108,7 +108,7 @@ const SubmissionsPage = () => {
                           className="flex items-center justify-between w-full text-left text-2xl font-bold text-gray-800 dark:text-white group"
                         >
                           <span>{semester}</span>
-                          <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-indigo-600 ${expanded[`${year}-${semester}`] ? 'rotate-180' : ''}`} />
+                          <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-primary ${expanded[`${year}-${semester}`] ? 'rotate-180' : ''}`} />
                         </button>
                         {expanded[`${year}-${semester}`] && (
                           <div className="mt-4 space-y-4">
@@ -119,7 +119,7 @@ const SubmissionsPage = () => {
                                   className="flex items-center justify-between w-full text-left text-xl font-bold text-gray-800 dark:text-white group"
                                 >
                                   <span>{moduleTitle}</span>
-                                  <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-indigo-600 ${expanded[`${year}-${semester}-${moduleTitle}`] ? 'rotate-180' : ''}`} />
+                                  <ChevronDownIcon className={`h-6 w-6 transform transition-transform group-hover:text-primary ${expanded[`${year}-${semester}-${moduleTitle}`] ? 'rotate-180' : ''}`} />
                                 </button>
                                 {expanded[`${year}-${semester}-${moduleTitle}`] && (
                                   <div className="mt-4 space-y-4">
@@ -129,7 +129,7 @@ const SubmissionsPage = () => {
                                           <>
                                             <div className="flex items-center justify-between">
                                               <div className="flex items-center">
-                                                <DocumentTextIcon className="h-8 w-8 text-blue-500 mr-3" />
+                                                <DocumentTextIcon className="h-8 w-8 text-primary mr-3" />
                                                 <h2 className="text-lg font-bold text-gray-800 dark:text-white">
                                                   {item.assessment.title}
                                                 </h2>
@@ -154,7 +154,7 @@ const SubmissionsPage = () => {
                                             )}
                                             <div className="mt-4 text-right">
                                               <Link href={`/student/submissions/${item.submission_id}`} legacyBehavior>
-                                                <a className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                <a className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                                   View Submission
                                                 </a>
                                               </Link>
@@ -164,12 +164,12 @@ const SubmissionsPage = () => {
                                           <>
                                             <div className="flex items-center justify-between">
                                               <div className="flex items-center">
-                                                <AcademicCapIcon className="h-8 w-8 text-purple-500 mr-3" />
+                                                <AcademicCapIcon className="h-8 w-8 text-primary mr-3" />
                                                 <h2 className="text-lg font-bold text-gray-800 dark:text-white">
                                                   Observation
                                                 </h2>
                                               </div>
-                                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-primary/10 text-primary">
                                                 <CheckCircleIcon className="h-4 w-4 mr-1" /> Recorded
                                               </span>
                                             </div>
@@ -181,7 +181,7 @@ const SubmissionsPage = () => {
                                             </p>
                                             <div className="mt-4 text-right">
                                               <Link href={`/student/observations/${item.id}`} legacyBehavior>
-                                                <a className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                                <a className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                                                   View Observation
                                                 </a>
                                               </Link>

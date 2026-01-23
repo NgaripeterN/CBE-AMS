@@ -53,7 +53,7 @@ const About = () => {
               </nav>
             </div>
             <div className="flex items-center gap-3">
-              <Link href="/login" className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium shadow hover:bg-indigo-700 transition">Login</Link>
+              <Link href="/login" className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow hover:bg-primary/90 transition">Login</Link>
               <ThemeSwitcher />
             </div>
           </div>
@@ -69,7 +69,7 @@ const About = () => {
           >
             <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               <span className="block">The Future of</span>
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Verified Achievement</span>
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60">Verified Achievement</span>
             </h1>
             <p className="mt-6 text-lg text-slate-600 dark:text-slate-300 max-w-3xl mx-auto">
               CBE-AMS is a collaborative open-source project dedicated to building a new, equitable infrastructure for academic and professional credentialing.
@@ -92,7 +92,7 @@ const About = () => {
               >
                 {principles.map((p, i) => (
                   <motion.div key={i} variants={itemVariants} className="p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 border border-gray-100 dark:border-slate-700">
-                    <div className="text-4xl text-indigo-500 mb-4">{p.icon}</div>
+                    <div className="text-4xl text-primary mb-4">{p.icon}</div>
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{p.title}</h3>
                     <p className="text-slate-500 dark:text-slate-400">{p.description}</p>
                   </motion.div>
@@ -118,7 +118,7 @@ const About = () => {
                 {processSteps.map((step, i) => (
                   <>
                     <motion.div key={i} variants={itemVariants} className="flex flex-col items-center text-center w-full md:w-1/4">
-                      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 text-3xl mb-4">
+                      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary-foreground text-3xl mb-4">
                         {step.icon}
                       </div>
                       <p className="font-semibold text-slate-700 dark:text-slate-200">{step.text}</p>

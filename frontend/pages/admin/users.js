@@ -32,7 +32,7 @@ const UserManagementPage = () => {
   return (
     <>
       <motion.h1
-        className="text-5xl font-extrabold mb-12 text-foreground tracking-tight bg-gradient-to-r from-primary via-purple-400 to-pink-400 bg-clip-text text-transparent"
+        className="text-5xl font-extrabold mb-12 text-foreground tracking-tight"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7 }}
@@ -52,7 +52,7 @@ const UserManagementPage = () => {
           >
             <Link href={card.href} legacyBehavior>
               <a className="group block p-10 w-full rounded-2xl 
-                bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 
+                bg-card dark:bg-card/50
                 border border-white/10 shadow-lg hover:shadow-2xl 
                 hover:-translate-y-2 transition-all duration-500 
                 backdrop-blur-lg flex flex-col justify-center hover:brightness-110">

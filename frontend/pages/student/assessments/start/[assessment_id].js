@@ -243,7 +243,7 @@ const AssessmentSubmissionPage = () => {
             <header className="mb-8 flex justify-between items-center">
                 <button
                     onClick={goBack}
-                    className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="inline-flex items-center mb-4 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
                     <ArrowLeftIcon className="h-5 w-5 mr-2" />
                     Back
@@ -273,7 +273,7 @@ const AssessmentSubmissionPage = () => {
                             <div className="flex justify-between w-full items-center mb-2">
                                 <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Question {index + 1}</span>
                                 {q.marks !== undefined && (
-                                    <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                    <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
                                         {q.marks} marks
                                     </span>
                                 )}
@@ -368,7 +368,7 @@ const AssessmentSubmissionPage = () => {
                         <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="flex items-center justify-center bg-green-600 text-white px-8 py-3 rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-300"
+                        className="flex items-center justify-center bg-primary text-primary-foreground px-8 py-3 rounded-lg shadow-md hover:bg-primary/90 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-300"
                         >
                         <FiCheckCircle className="w-5 h-5 mr-2" />
                         {isSubmitting ? 'Submitting...' : 'Submit Assessment'}

@@ -421,6 +421,7 @@ const getCourseById = async (req, res) => {
   try {
     const course = await prisma.course.findUnique({
       where: { course_id: id },
+      include: { competencies: true },
     });
     if (!course) {
       return res.status(404).json({ error: 'Course not found' });
@@ -837,6 +838,9 @@ const getModulesForCourse = async (req, res) => {
       where,
       skip,
       take: limitNum,
+      include: {
+        competencies: true,
+      },
     });
 
     const total = await prisma.module.count({ where });

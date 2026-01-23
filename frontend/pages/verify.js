@@ -233,8 +233,8 @@ const VerifyCredential = () => {
                 relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer
                 flex flex-col items-center justify-center p-12 text-center group
                 ${isDragActive 
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 ring-4 ring-indigo-500/10' 
-                    : 'border-slate-300 dark:border-slate-700 hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-4 ring-primary/10' 
+                    : 'border-slate-300 dark:border-slate-700 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }
             `}
           >
@@ -242,7 +242,7 @@ const VerifyCredential = () => {
             
             <div className={`
                 p-4 rounded-full mb-4 transition-transform duration-300 group-hover:scale-110
-                ${isDragActive ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}
+                ${isDragActive ? 'bg-primary/10 dark:bg-primary/20 text-primary' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}
             `}>
                 <CloudArrowUpIcon className="h-10 w-10" />
             </div>
@@ -258,7 +258,7 @@ const VerifyCredential = () => {
           <div className="min-h-[100px] mt-8">
             {loading && (
                 <div className="flex flex-col items-center justify-center py-8 animate-in fade-in zoom-in duration-300">
-                    <div className="h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+                    <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
                     <p className="text-slate-600 dark:text-slate-400 animate-pulse">Verifying cryptographic signature...</p>
                 </div>
             )}

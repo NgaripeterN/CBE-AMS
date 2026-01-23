@@ -35,7 +35,7 @@ const ModuleDetailsPage = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -58,7 +58,7 @@ const ModuleDetailsPage = () => {
               <p className="text-lg text-gray-500 mt-1">{module.moduleCode}</p>
             </div>
             <Link href="/assessor/my-modules" legacyBehavior>
-              <a className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out">
+              <a className="bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out">
                 &larr; Back to Modules
               </a>
             </Link>
@@ -93,17 +93,17 @@ const ModuleDetailsPage = () => {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Module Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Link href={`/assessor/enroll-student?offeringId=${offering.id}`} legacyBehavior>
-                <a className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
+                <a className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
                   Enroll Student
                 </a>
               </Link>
               <Link href={`/assessor/create-assessment?module_id=${id}`} legacyBehavior>
-                <a className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
+                <a className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
                   Create Assessment
                 </a>
               </Link>
               <Link href={`/assessor/grade-submissions?module_id=${id}`} legacyBehavior>
-                <a className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
+                <a className="bg-secondary hover:bg-secondary/80 text-secondary-foreground font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out text-center">
                   Grade Submissions
                 </a>
               </Link>

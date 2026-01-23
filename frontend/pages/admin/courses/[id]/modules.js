@@ -54,7 +54,7 @@ const CourseModulesPage = () => {
 
   const openCompetencyModal = (module) => {
     setSelectedModule(module);
-    setSelectedCompetencyIds(module.competencies.map(c => c.id));
+    setSelectedCompetencyIds((module.competencies || []).map(c => c.id));
     setIsModalOpen(true);
   };
 
@@ -177,7 +177,11 @@ const CourseModulesPage = () => {
           <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-2xl">
             <h3 className="text-lg font-medium leading-6 text-foreground">Manage Competencies for {selectedModule?.title}</h3>
             <div className="mt-4">
-              <CompetencySelector selectedIds={selectedCompetencyIds} onChange={setSelectedCompetencyIds} />
+              <CompetencySelector
+                selectedIds={selectedCompetencyIds}
+                onChange={setSelectedCompetencyIds}
+                availableCompetencies={course?.competencies || []}
+              />
             </div>
             <div className="flex justify-end space-x-2 pt-4 mt-4 border-t border-border">
               <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80">Cancel</button>

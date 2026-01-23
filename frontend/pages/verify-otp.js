@@ -55,11 +55,11 @@ export default function VerifyOtp() {
         <meta name="description" content="Verify your OTP to sign in to CBE-AMS" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800 flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
         <header className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border-b border-transparent dark:border-slate-700">
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link href="/" className="inline-flex items-center px-4 py-2 rounded-md bg-purple-600 text-white text-sm font-medium shadow hover:bg-purple-700 transition">
+            <Link href="/" className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow hover:bg-primary/90 transition">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -91,7 +91,7 @@ export default function VerifyOtp() {
                       required
                       value={otp}
                       onChange={(e) => setOtp(e.target.value)}
-                      className="block w-full pr-3 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                      className="block w-full pr-3 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm"
                       placeholder="123456"
                     />
                   </div>
@@ -108,8 +108,8 @@ export default function VerifyOtp() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`w-full inline-flex justify-center items-center px-4 py-2 rounded-md text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
-                      loading ? "bg-purple-500 cursor-wait" : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                    className={`w-full inline-flex justify-center items-center px-4 py-2 rounded-md text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ${
+                      loading ? "bg-primary/70 cursor-wait" : "bg-primary hover:bg-primary/90"
                     }`}
                   >
                     {loading ? (
@@ -131,7 +131,7 @@ export default function VerifyOtp() {
                 <button
                   onClick={handleResend}
                   disabled={resendLoading}
-                  className="text-sm font-medium text-purple-600 hover:underline dark:text-blue-400"
+                  className="text-sm font-medium text-primary hover:underline dark:text-primary"
                 >
                   {resendLoading ? "Resending..." : "Resend OTP"}
                 </button>

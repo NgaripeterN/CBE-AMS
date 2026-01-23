@@ -37,11 +37,11 @@ export default function Login() {
         <meta name="description" content="Sign in to CBE-AMS" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-slate-900 dark:to-slate-800 flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
         <header className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border-b border-transparent dark:border-slate-700">
           <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link href="/" className="inline-flex items-center px-4 py-2 rounded-md bg-purple-600 text-white text-sm font-medium shadow hover:bg-purple-700 transition">
+            <Link href="/" className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow hover:bg-primary/90 transition">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -59,7 +59,7 @@ export default function Login() {
               {/* Left: brand + short info */}
               <div className="hidden md:flex flex-col gap-6 pl-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center shadow-md">
+                  <div className="w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center shadow-md">
                     <span className="text-white font-bold">C</span>
                   </div>
                   <div>
@@ -68,7 +68,7 @@ export default function Login() {
                   </div>
                 </div>
 
-                <div className="bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+                <div className="bg-card border border-primary/70 rounded-2xl p-6 shadow-lg dark:shadow-dark-lg backdrop-blur-sm">
                   <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h3>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     Sign in to manage credentials, assessments and reports.
@@ -76,14 +76,14 @@ export default function Login() {
 
                   <div className="mt-6 grid grid-cols-1 gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400 font-semibold">✓</div>
+                      <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center text-primary dark:text-primary font-semibold">✓</div>
                       <div>
                         <p className="text-sm font-medium text-slate-800 dark:text-white">Secure</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Privacy-first design</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold">🔒</div>
+                      <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-secondary-foreground font-semibold">🔒</div>
                       <div>
                         <p className="text-sm font-medium text-slate-800 dark:text-white">Verified</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Blockchain anchored proofs</p>
@@ -95,7 +95,7 @@ export default function Login() {
 
               {/* Right: login card */}
               <div className="mx-auto w-full">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 p-8">
+                <div className="bg-card rounded-2xl shadow-lg dark:shadow-dark-lg border border-primary/70 p-8">
                   <div className="text-center">
                     <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Sign in</h1>
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Use your account to access the dashboard</p>
@@ -120,7 +120,7 @@ export default function Login() {
                           required
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="block w-full pl-11 pr-3 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          className="block w-full pl-11 pr-3 py-2 border border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm"
                           placeholder="you@example.com"
                         />
                       </div>
@@ -145,7 +145,7 @@ export default function Login() {
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="block w-full pl-11 pr-12 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          className="block w-full pl-11 pr-12 py-2 border border-slate-400 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-md placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm"
                           placeholder="••••••••"
                           autoComplete="current-password"
                         />
@@ -171,7 +171,7 @@ export default function Login() {
                     {/* actions */}
                     <div className="flex items-center justify-end">
                       <div className="text-sm">
-                        <Link href="/forgot-password" className="font-medium text-purple-600 hover:underline dark:text-blue-400">Forgot password?</Link>
+                        <Link href="/forgot-password" className="font-medium text-primary hover:underline dark:text-primary">Forgot password?</Link>
                       </div>
                     </div>
 
@@ -179,8 +179,8 @@ export default function Login() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full inline-flex justify-center items-center px-4 py-2 rounded-md text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
-                          loading ? "bg-purple-500 cursor-wait" : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                        className={`w-full inline-flex justify-center items-center px-4 py-2 rounded-md text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ${
+                          loading ? "bg-primary/70 cursor-wait" : "bg-primary hover:bg-primary/90"
                         }`}
                       >
                         {loading ? (
