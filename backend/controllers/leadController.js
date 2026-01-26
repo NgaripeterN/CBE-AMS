@@ -730,6 +730,66 @@ const assignAssessorToStudent = async (req, res) => {
     }
 };
 
+const getOfferingStats = async (req, res) => {
+  const { course_id, semester_id } = req.params;
+  const { userId } = req.user;
+  const { calculateFinalScore } = require('../lib/scoring');
+
+  try {
+    const lead = await prisma.assessor.findUnique({ where: { userId } });
+    const isLead = await prisma.courseAssignment.findFirst({
+      where: { courseId: course_id, assessorId: lead?.id, role: 'LEAD' }
+    });
+
+    if (!isLead && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Forbidden: You are not a lead for this course.' });
+    }
+
+    const offerings = await prisma.offering.findMany({
+      where: { semesterId: semester_id, module: { course_id: course_id } },
+      include: { 
+        module: { include: { competencies: true } },
+        semester: true
+      }
+    });
+
+    const results = await Promise.all(offerings.map(async (offering) => {
+      const enrollments = await prisma.enrollment.findMany({
+        where: { module_id: offering.moduleId, status: 'ACTIVE' },
+        include: { student: { include: { user: true } } }
+      });
+
+      const studentData = await Promise.all(enrollments.map(async (e) => {
+        const score = await calculateFinalScore(e.student.id, offering.moduleId);
+        return {
+          name: e.student.user.name,
+          score: Math.round(score || 0),
+          isPassed: (score || 0) >= 50
+        };
+      }));
+
+      const avg = studentData.length > 0 ? studentData.reduce((a, b) => a + b.score, 0) / studentData.length : 0;
+
+      return {
+        moduleId: offering.moduleId,
+        title: offering.module.title,
+        moduleCode: offering.module.moduleCode,
+        average: parseFloat(avg.toFixed(2)),
+        studentCount: studentData.length,
+        passRate: studentData.length > 0 
+          ? parseFloat(((studentData.filter(s => s.isPassed).length / studentData.length) * 100).toFixed(2))
+          : 0,
+        students: studentData
+      };
+    }));
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching offering stats:', error);
+    res.status(500).json({ error: 'An error occurred while fetching offering statistics.' });
+  }
+};
+
 module.exports = {
   createModule,
   publishModule,
@@ -749,4 +809,5 @@ module.exports = {
   getStudentsForCourse,
   importModules,
   assignAssessorToStudent,
+  getOfferingStats,
 };

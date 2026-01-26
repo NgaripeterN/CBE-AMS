@@ -86,9 +86,15 @@ const AssessorDashboard = () => {
                 <div className="bg-muted rounded-lg p-4">
                   <h4 className="text-xl font-semibold text-foreground">{course.name}</h4>
                   <p className="text-muted-foreground mt-1">{course.code}</p>
-                  <Link href={`/assessor/course-management/${course.course_id}`} className="mt-4 inline-block bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
-                      Manage Course
-                  </Link>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <Link href={`/assessor/course-management/${course.course_id}`} className="w-full text-center bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2.5 px-4 rounded-lg transition-all duration-300 shadow-sm">
+                        Manage Course
+                    </Link>
+                    <Link href={`/assessor/course-management/performance?courseId=${course.course_id}`} className="w-full text-center bg-background hover:bg-muted text-foreground font-bold py-2.5 px-4 rounded-lg transition-all duration-300 border-2 border-primary/30 hover:border-primary shadow-sm flex items-center justify-center gap-2">
+                        <DocumentChartBarIcon className="h-4 w-4 text-primary" />
+                        Performance Analytics
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}

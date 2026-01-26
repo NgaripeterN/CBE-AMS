@@ -27,5 +27,6 @@ router.put('/courses/:course_id/credential-rule', isCourseLead, leadController.u
 router.get('/courses/:course_id/modules', isCourseLead, leadController.getCourseModules);
 router.get('/modules', isLead, leadController.getAllModules);
 router.get('/courses/:course_id/students', isCourseLead, leadController.getStudentsForCourse);
+router.get('/courses/:course_id/offerings/:semester_id/stats', isCourseLead, leadController.getOfferingStats);
 
 module.exports = router;

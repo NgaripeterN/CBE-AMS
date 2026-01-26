@@ -22,6 +22,7 @@ router.get('/modules/:moduleId/submissions', isModuleAssessor, assessorControlle
 router.get('/modules/:moduleId/observations', isModuleAssessor, assessorController.getObservationsForModule);
 router.get('/modules/:module_id/assessments', isModuleAssessor, assessorController.getAssessmentsForModule);
 router.get('/modules/:moduleId/offering', assessorController.getOfferingByModule);
+router.get('/modules/:moduleId/stats', isModuleAssessor, assessorController.getModuleStats);
 router.get('/assessments/:id', assessorController.getAssessmentById);
 router.post('/create-assessment/:module_id', isModuleAssessor, assessorController.createAssessment);
 router.put('/assessments/:id', isModuleAssessor, assessorController.updateAssessment);

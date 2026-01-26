@@ -48,6 +48,7 @@ const getModules = async (req, res) => {
       return res.status(404).json({ error: 'Assessor profile not found' });
     }
 
+    // Initial where: restrict by assessor and course
     const where = {
       assessorId: assessor.id,
       offering: {
@@ -59,21 +60,18 @@ const getModules = async (req, res) => {
       where.offering.module.course_id = courseId;
     }
 
-    if (tab === 'active') {
-      where.offering.module.status = 'PUBLISHED';
-    } else if (tab === 'completed') {
-      where.offering.module.status = 'DEPRECATED';
-    }
-
-    const totalAssignments = await prisma.offeringAssignment.count({ where });
-
+    // Fetch ALL assigned modules for this assessor to calculate completion status in memory
+    // (Assessors typically have < 50 modules, so this is performant enough for filtering)
     const offeringAssignments = await prisma.offeringAssignment.findMany({
       where,
-      skip: offset,
-      take: limitNum,
       include: {
         offering: {
           include: {
+            semester: {
+              include: {
+                academicYear: true
+              }
+            },
             module: {
               include: {
                 course: true,
@@ -84,16 +82,57 @@ const getModules = async (req, res) => {
       }
     });
 
-    const modules = offeringAssignments.map(assignment => {
+    const now = new Date();
+
+    // Process and calculate completion status for every module
+    const allProcessedModules = await Promise.all(offeringAssignments.map(async (assignment) => {
+      const ungradedCount = await prisma.submission.count({
+        where: {
+          assessment: {
+            module_id: assignment.offering.module.module_id,
+          },
+          gradedAt: null,
+          student: {
+            enrollments: {
+              some: {
+                module_id: assignment.offering.module.module_id,
+                assessor_id: assessor.id
+              }
+            }
+          }
+        }
+      });
+
+      const semesterEnded = new Date(assignment.offering.semester.endDate) < now;
+      const isCompleted = semesterEnded && ungradedCount === 0;
+
       return {
         ...assignment.offering.module,
         offeringId: assignment.offering.id,
+        semester: assignment.offering.semester,
+        academicYear: assignment.offering.semester.academicYear,
+        ungradedCount,
+        isCompleted
+      };
+    }));
+
+    // Filter based on tab
+    const filteredModules = allProcessedModules.filter(m => {
+      if (tab === 'completed') {
+        return m.isCompleted;
+      } else {
+        // 'active' tab includes ongoing modules AND ended modules with pending work
+        return !m.isCompleted;
       }
     });
 
+    // Handle manual pagination
+    const totalCount = filteredModules.length;
+    const paginatedModules = filteredModules.slice(offset, offset + limitNum);
+
     res.json({
-      modules,
-      totalPages: Math.ceil(totalAssignments / limitNum),
+      modules: paginatedModules,
+      totalPages: Math.ceil(totalCount / limitNum),
       currentPage: pageNum,
     });
   } catch (error) {
@@ -1601,6 +1640,110 @@ const updateObservation = async (req, res) => {
   }
 };
 
+const getModuleStats = async (req, res) => {
+  const { moduleId } = req.params;
+  const { userId } = req.user;
+
+  try {
+    const assessor = await prisma.assessor.findUnique({ where: { userId } });
+    const module = await prisma.module.findUnique({ 
+      where: { module_id: moduleId },
+      include: { competencies: true }
+    });
+
+    if (!assessor || !module) {
+      return res.status(404).json({ error: 'Assessor or Module not found' });
+    }
+
+    // Check if user is a lead for this course
+    const leadAssignment = await prisma.courseAssignment.findFirst({
+      where: {
+        courseId: module.course_id,
+        assessorId: assessor.id,
+        role: 'LEAD'
+      }
+    });
+
+    // If Lead, get ALL students in the module. If regular assessor, get only assigned students.
+    const enrollmentWhere = {
+      module_id: moduleId,
+      status: 'ACTIVE'
+    };
+
+    if (!leadAssignment && req.user.role !== 'ADMIN') {
+      enrollmentWhere.assessor_id = assessor.id;
+    }
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: enrollmentWhere,
+      include: {
+        student: { include: { user: true } }
+      }
+    });
+
+    const studentPerformance = await Promise.all(enrollments.map(async (enrollment) => {
+      const studentId = enrollment.student.id;
+      
+      // Calculate score using existing scoring logic
+      const calculatedScore = await calculateFinalScore(studentId, moduleId);
+      const finalScore = typeof calculatedScore === 'number' && !isNaN(calculatedScore) ? Math.round(calculatedScore) : 0;
+      
+      // Get competencies met
+      const evidence = await prisma.studentCompetencyEvidence.findMany({
+        where: {
+          studentId,
+          moduleId,
+          status: 'SUCCESS'
+        },
+        select: { competencyId: true }
+      });
+      
+      const metCompetencyIds = [...new Set(evidence.map(e => e.competencyId))];
+      
+      return {
+        studentId,
+        name: enrollment.student.user.name,
+        regNumber: enrollment.student.user.regNumber,
+        finalScore: finalScore,
+        isPassed: finalScore >= 50, // Assuming 50 is pass mark
+        competenciesMet: metCompetencyIds.length,
+        totalCompetencies: module.competencies.length
+      };
+    }));
+
+    // Aggregate Stats
+    const scores = studentPerformance.map(s => s.finalScore);
+    const average = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const sortedScores = [...scores].sort((a, b) => a - b);
+    const median = scores.length > 0 ? sortedScores[Math.floor(scores.length / 2)] : 0;
+    
+    const distribution = {
+      '0-39': studentPerformance.filter(s => s.finalScore < 40).length,
+      '40-49': studentPerformance.filter(s => s.finalScore >= 40 && s.finalScore < 50).length,
+      '50-59': studentPerformance.filter(s => s.finalScore >= 50 && s.finalScore < 60).length,
+      '60-69': studentPerformance.filter(s => s.finalScore >= 60 && s.finalScore < 70).length,
+      '70-100': studentPerformance.filter(s => s.finalScore >= 70).length,
+    };
+
+    res.json({
+      aggregate: {
+        average: parseFloat((average || 0).toFixed(2)),
+        median: parseFloat((median || 0).toFixed(2)),
+        totalStudents: studentPerformance.length,
+        passRate: studentPerformance.length > 0 
+          ? parseFloat(((studentPerformance.filter(s => s.isPassed).length / studentPerformance.length) * 100).toFixed(2))
+          : 0,
+        distribution
+      },
+      students: studentPerformance
+    });
+
+  } catch (error) {
+    console.error('Error fetching module stats:', error);
+    res.status(500).json({ error: 'An error occurred while fetching statistics' });
+  }
+};
+
 module.exports = {
   getCourses,
   getModules,
@@ -1626,4 +1769,5 @@ module.exports = {
   getDashboardMetrics,
   getObservationsForModule,
   updateObservation,
+  getModuleStats,
 };

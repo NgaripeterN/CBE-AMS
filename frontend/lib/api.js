@@ -573,4 +573,17 @@ export const getSubmissionMediaUrl = async (submissionId, questionIndex) => {
   }
 };
 
+export const getOfferingPerformance = async (courseId, semesterId) => {
+  try {
+    const { data } = await api.get(`/lead/courses/${courseId}/offerings/${semesterId}/stats`);
+    return data;
+  } catch (error) {
+    if (error.response) {
+      throw error;
+    } else {
+      throw new Error('Network Error');
+    }
+  }
+};
+
 export default api;
