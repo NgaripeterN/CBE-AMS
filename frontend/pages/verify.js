@@ -21,11 +21,30 @@ const VerificationResult = ({ result }) => {
     const { payload, verificationResult } = result;
     const { isValid, reason, issuerAddress, timestamp } = verificationResult;
 
-    const score = payload.credentialSubject?.score || payload.result?.score;
-    const descriptor = payload.credentialSubject?.descriptor || payload.result?.descriptor;
+    let score = payload.credentialSubject?.score || payload.result?.score || payload.badge?.result?.score;
+    const descriptor = payload.credentialSubject?.descriptor || payload.result?.descriptor || payload.badge?.result?.descriptor;
     const transcript = payload.credentialSubject?.transcript;
     const evidenceModules = payload.credentialSubject?.evidenceModules;
     const demonstratedCompetencies = payload.credentialSubject?.demonstratedCompetencies;
+
+    // Fallback: Calculate weighted average if score is null/undefined but transcript exists
+    if ((score === null || score === undefined) && transcript && transcript.length > 0) {
+        let totalWeightedScore = 0;
+        let totalWeight = 0;
+
+        transcript.forEach(item => {
+            const s = parseFloat(item.score);
+            const w = parseFloat(item.weight) / 100; // Assuming weight is like "25%"
+            if (!isNaN(s) && !isNaN(w)) {
+                totalWeightedScore += (s * w);
+                totalWeight += w;
+            }
+        });
+
+        if (totalWeight > 0) {
+            score = totalWeightedScore / totalWeight;
+        }
+    }
 
     return (
         <div className={`mt-8 overflow-hidden rounded-xl border shadow-lg transition-all duration-300 ${isValid ? 'border-green-500/50 bg-green-50/50 dark:bg-green-900/10' : 'border-red-500/50 bg-red-50/50 dark:bg-red-900/10'}`}>
@@ -66,16 +85,22 @@ const VerificationResult = ({ result }) => {
                             <dt className="text-muted-foreground">Title</dt>
                             <dd className="font-medium text-foreground">{payload.badge?.name || 'Not available'}</dd>
                         </div>
-                        {score && (
-                            <div className="flex flex-col">
-                                <dt className="text-muted-foreground">Score</dt>
-                                <dd className="font-medium text-foreground">{score.toFixed(2)}%</dd>
-                            </div>
+                        {score !== undefined && score !== null && (
+                            <>
+                                <div className="flex flex-col">
+                                    <dt className="text-muted-foreground">Weighted Average</dt>
+                                    <dd className="font-bold text-primary">{Number(score).toFixed(2)}%</dd>
+                                </div>
+                            </>
                         )}
                         {descriptor && (
                             <div className="flex flex-col">
                                 <dt className="text-muted-foreground">Descriptor</dt>
-                                <dd className="font-medium text-foreground">{descriptor}</dd>
+                                <dd className="font-medium text-foreground">
+                                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-mono border border-primary/20">
+                                        {descriptor}
+                                    </span>
+                                </dd>
                             </div>
                         )}
                     </dl>
