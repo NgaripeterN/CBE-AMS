@@ -197,7 +197,8 @@ const deleteUser = async (req, res) => {
           await prisma.submission.deleteMany({ where: { student_id: student.id } });
           await prisma.microCredential.deleteMany({ where: { student_id: student.id } });
           await prisma.courseCredential.deleteMany({ where: { student_id: student.id } });
-          await prisma.observation.deleteMany({ where: { student_id: student.id } });
+          await prisma.studentCompetencyEvidence.deleteMany({ where: { studentId: student.id } });
+          await prisma.studentsOnObservations.deleteMany({ where: { studentId: student.id } });
           await prisma.student.delete({ where: { userId: id } });
         }
       }
