@@ -138,7 +138,7 @@ const OfferingsPage = () => {
     const fetchOfferings = useCallback(async (page = 1, append = false) => {
         if (!selectedSemesterId) return [];
         try {
-            const offeringsRes = await api.get(`/curriculum/offerings/${selectedSemesterId}?page=${page}&limit=5`);
+            const offeringsRes = await api.get(`/curriculum/offerings/${selectedSemesterId}?page=${page}&limit=10`);
             const newOfferings = offeringsRes.data.offerings;
             if (append) {
                 setOfferings(prev => [...prev, ...newOfferings]);
@@ -226,8 +226,7 @@ const OfferingsPage = () => {
             setToastType('success');
             setShowToast(true);
         } catch (error) {
-            console.error("Error assigning module and assessors:", error);
-            setToastMessage(error.response?.data?.error || 'Failed to assign module and assessors.');
+            setToastMessage(error.response?.data?.error || 'Failed to assign module.');
             setToastType('error');
             setShowToast(true);
         }
@@ -239,21 +238,32 @@ const OfferingsPage = () => {
 
         try {
             const assessorIds = selectedAssessors.map(a => a.value);
-            const res = await api.put(`/curriculum/offerings/${isEditingOffering.id}`, {
+            
+            // Extract metadata from the target semester to sync with the module
+            const targetSemester = editingOfferingSemesters.find(s => s.id === editingOfferingSemesterId);
+            const semesterNumberMatch = targetSemester?.name.match(/\d+/);
+            const semesterOfStudy = semesterNumberMatch ? parseInt(semesterNumberMatch[0], 10) : undefined;
+            
+            // For yearOfStudy, we'll try to find which year the user originally intended 
+            // but for now we use the filter context or keep existing.
+            // A more robust way is to allow choosing yearOfStudy in the edit modal too.
+
+            await api.put(`/curriculum/offerings/${isEditingOffering.id}`, {
                 semesterId: editingOfferingSemesterId,
                 assessorIds: assessorIds,
+                semesterOfStudy: semesterOfStudy, // SYNC metadata
+                yearOfStudy: parseInt(selectedYearOfStudy) // SYNC metadata based on current filter context
             });
-            console.log('Offering updated:', res.data);
+            
             filterModules();
             setIsEditingOffering(null);
             setEditingOfferingAcademicYearId('');
             setEditingOfferingSemesterId('');
             setSelectedAssessors([]);
-            setToastMessage('Offering updated successfully!');
+            setToastMessage('Offering updated and metadata synced successfully!');
             setToastType('success');
             setShowToast(true);
         } catch (error) {
-            console.error('Error updating offering:', error);
             if (error.response?.status === 409) {
                 setConflictDetails(error.response.data.conflict);
             } else {
@@ -274,7 +284,6 @@ const OfferingsPage = () => {
             filterModules();
             setIsDeletingOffering(null);
         } catch (error) {
-            console.error('Error deleting offering:', error);
             setToastMessage(error.response?.data?.error || 'Failed to delete offering.');
             setToastType('error');
             setShowToast(true);
@@ -287,12 +296,8 @@ const OfferingsPage = () => {
             await api.delete(`/curriculum/offerings/${conflictDetails.offeringId}`);
             setConflictDetails(null);
             await handleUpdateOffering();
-            setToastMessage('Conflict resolved: Old offering replaced and current one updated.');
-            setToastType('success');
-            setShowToast(true);
         } catch (error) {
-            console.error('Error resolving conflict:', error);
-            setToastMessage('Failed to resolve conflict automatically.');
+            setToastMessage('Failed to resolve conflict.');
             setToastType('error');
             setShowToast(true);
         }
@@ -310,36 +315,30 @@ const OfferingsPage = () => {
 
     const groupedOfferings = offerings.reduce((acc, offering) => {
         const year = offering.module.yearOfStudy;
-        if (!acc[year]) {
-            acc[year] = [];
-        }
+        if (!acc[year]) acc[year] = [];
         acc[year].push(offering);
         return acc;
     }, {});
 
     return (
-        <>
+        <div className="container mx-auto px-4 py-4">
             <AnimatePresence>
                 {isAssigning && isLead && (
                     <Modal onClose={() => setIsAssigning(null)}>
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Assign Assessors to {isAssigning.title}</h2>
+                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Assign Assessors: {isAssigning.title}</h2>
                             <form onSubmit={handleAssignAssessor}>
                                 <AsyncSelect
-                                    cacheOptions
-                                    defaultOptions
-                                    isMulti
+                                    cacheOptions defaultOptions isMulti
                                     loadOptions={loadAssessorOptions}
                                     styles={customStyles}
                                     onChange={setSelectedAssessors}
                                     value={selectedAssessors}
-                                    placeholder="Search for assessors..."
-                                    isClearable
+                                    placeholder="Search assessors..."
                                     className="mb-4"
                                 />
-                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={selectedAssessors.length === 0}>
-                                    <PlusIcon className="h-5 w-5" />
-                                    Assign
+                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors">
+                                    <PlusIcon className="h-5 w-5" /> Assign
                                 </button>
                             </form>
                         </div>
@@ -349,54 +348,45 @@ const OfferingsPage = () => {
                 {isEditingOffering && isLead && (
                     <Modal onClose={() => setIsEditingOffering(null)}>
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Offering: {isEditingOffering.module.title}</h2>
+                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Transfer/Edit: {isEditingOffering.module.title}</h2>
                             <form onSubmit={handleUpdateOffering}>
                                 <div className="mb-4">
-                                    <label htmlFor="editAcademicYear" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Academic Year</label>
+                                    <label className="block text-sm font-medium mb-2">Academic Year</label>
                                     <select
-                                        id="editAcademicYear"
                                         value={editingOfferingAcademicYearId}
-                                        onChange={e => {
-                                            setEditingOfferingAcademicYearId(e.target.value);
-                                            setEditingOfferingSemesterId('');
-                                        }}
+                                        onChange={e => { setEditingOfferingAcademicYearId(e.target.value); setEditingOfferingSemesterId(''); }}
                                         className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
                                     >
-                                        <option value="">Select Academic Year</option>
+                                        <option value="">Select Year</option>
                                         {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="mb-4">
-                                    <label htmlFor="editSemester" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semester</label>
+                                    <label className="block text-sm font-medium mb-2">Semester</label>
                                     <select
-                                        id="editSemester"
                                         value={editingOfferingSemesterId}
                                         onChange={e => setEditingOfferingSemesterId(e.target.value)}
                                         className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
                                         disabled={!editingOfferingAcademicYearId}
                                     >
                                         <option value="">Select Semester</option>
-                                        {editingOfferingSemesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
+                                        {editingOfferingSemesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="mb-4">
-                                    <label htmlFor="editAssessors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assessors</label>
+                                    <label className="block text-sm font-medium mb-2">Assessors</label>
                                     <AsyncSelect
-                                        cacheOptions
-                                        defaultOptions
-                                        isMulti
+                                        cacheOptions defaultOptions isMulti
                                         loadOptions={loadAssessorOptions}
                                         styles={customStyles}
                                         onChange={setSelectedAssessors}
                                         value={selectedAssessors}
-                                        placeholder="Search for assessors..."
-                                        isClearable
+                                        placeholder="Search assessors..."
                                         className="mb-4"
                                     />
                                 </div>
-                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={!editingOfferingAcademicYearId || !editingOfferingSemesterId}>
-                                    <PencilIcon className="h-5 w-5" />
-                                    Update Offering
+                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors">
+                                    <PencilIcon className="h-5 w-5" /> Update & Sync
                                 </button>
                             </form>
                         </div>
@@ -406,7 +396,7 @@ const OfferingsPage = () => {
                 {isDeletingOffering && isLead && (
                     <ConfirmDeleteModal
                         title="Delete Offering?"
-                        message={`Are you sure you want to delete the offering for "${isDeletingOffering.module.title}"? This will also remove all associated assignments.`}
+                        message={`Permanently remove the offering for "${isDeletingOffering.module.title}"?`}
                         onConfirm={handleDeleteOffering}
                         onClose={() => setIsDeletingOffering(null)}
                     />
@@ -415,24 +405,11 @@ const OfferingsPage = () => {
                 {conflictDetails && isLead && (
                     <Modal onClose={() => setConflictDetails(null)}>
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">Scheduling Conflict</h2>
-                            <p className="text-gray-700 dark:text-gray-300 mb-6">
-                                An offering for &quot;{conflictDetails.moduleTitle}&quot; already exists in the selected semester.
-                                Would you like to <strong>Replace</strong> it with this one?
-                            </p>
+                            <h2 className="text-2xl font-bold mb-4 text-red-600">Conflict Detected</h2>
+                            <p className="mb-6">An offering for &quot;{conflictDetails.moduleTitle}&quot; already exists in that semester. Replace it?</p>
                             <div className="flex justify-end gap-4">
-                                <button
-                                    onClick={() => setConflictDetails(null)}
-                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleConfirmReplace}
-                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                                >
-                                    Replace Existing
-                                </button>
+                                <button onClick={() => setConflictDetails(null)} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                                <button onClick={handleConfirmReplace} className="px-4 py-2 bg-red-500 text-white rounded-lg">Replace Existing</button>
                             </div>
                         </div>
                     </Modal>
@@ -441,123 +418,85 @@ const OfferingsPage = () => {
 
             <motion.div initial="hidden" animate="visible" variants={containerVariants}>
                 <div className="flex items-center mb-6">
-                    <button onClick={() => router.back()} className="mr-4 p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                    <button onClick={() => router.back()} className="mr-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                         <ArrowLeftIcon className="h-6 w-6" />
                     </button>
                     <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Class Scheduling & Enrollment</h1>
                 </div>
 
-                <motion.div variants={itemVariants} className="flex flex-wrap gap-4 mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                    <select value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
+                <div className="flex flex-wrap gap-4 mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                    <select value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border rounded-lg">
                         <option value="">Select Academic Year</option>
                         {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
                     </select>
-                    <select value={selectedSemesterId} onChange={e => setSelectedSemesterId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" disabled={!selectedYearId}>
+                    <select value={selectedSemesterId} onChange={e => setSelectedSemesterId(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border rounded-lg" disabled={!selectedYearId}>
                         <option value="">Select Semester</option>
-                        {semesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
+                        {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
-                    <select value={selectedYearOfStudy} onChange={e => setSelectedYearOfStudy(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" disabled={!selectedSemesterId}>
+                    <select value={selectedYearOfStudy} onChange={e => setSelectedYearOfStudy(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-gray-700 border rounded-lg" disabled={!selectedSemesterId}>
                         <option value="">Select Year of Study</option>
-                        {yearsOfStudy.map(year => <option key={year} value={year}>Year {year}</option>)}
+                        {yearsOfStudy.map(y => <option key={y} value={y}>Year {y}</option>)}
                     </select>
-                </motion.div>
+                </div>
 
                 {(selectedSemesterId && selectedYearOfStudy) && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <motion.div variants={itemVariants}>
-                            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Scheduled Classes</h2>
+                        <div>
+                            <h2 className="text-2xl font-semibold mb-4">Scheduled Classes</h2>
                             {Object.keys(groupedOfferings).sort().map(year => (
                                 <Accordion key={year} title={`Year ${year}`}>
                                     <div className="space-y-4">
-                                        {groupedOfferings[year].map(offering => (
-                                            <motion.div key={offering.id} variants={itemVariants} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex items-center gap-4">
-                                                        <CalendarDaysIcon className="h-8 w-8 text-green-500 dark:text-green-400" />
-                                                        <div>
-                                                            <h3 className="font-bold text-lg text-gray-900 dark:text-white">{offering.module.title}</h3>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                                                                Assessors: {offering.assessors.map(oa => oa.assessor.user.name).join(', ')}
-                                                            </p>
-                                                        </div>
+                                        {groupedOfferings[year].map(off => (
+                                            <div key={off.id} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg flex justify-between items-start">
+                                                <div className="flex items-center gap-4">
+                                                    <CalendarDaysIcon className="h-8 w-8 text-green-500" />
+                                                    <div>
+                                                        <h3 className="font-bold">{off.module.title}</h3>
+                                                        <p className="text-sm text-gray-500">Assessors: {off.assessors.map(a => a.assessor.user.name).join(', ')}</p>
                                                     </div>
-                                                    {isLead && (
-                                                        <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setIsEditingOffering(offering);
-                                                                    setEditingOfferingAcademicYearId(offering.semester.academicYear.id);
-                                                                    setEditingOfferingSemesterId(offering.semester.id);
-                                                                    setSelectedAssessors(offering.assessors.map(oa => ({
-                                                                        value: oa.assessor.id,
-                                                                        label: `${oa.assessor.user.name} (${oa.assessor.user.email})`
-                                                                    })));
-                                                                }}
-                                                                className="p-2 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                                                title="Edit Offering"
-                                                            >
-                                                                <PencilIcon className="h-5 w-5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setIsDeletingOffering(offering)}
-                                                                className="p-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                                                title="Delete Offering"
-                                                            >
-                                                                <TrashIcon className="h-5 w-5" />
-                                                            </button>
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            </motion.div>
+                                                {isLead && (
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => {
+                                                            setIsEditingOffering(off);
+                                                            setEditingOfferingAcademicYearId(off.semester.academicYear.id);
+                                                            setEditingOfferingSemesterId(off.semester.id);
+                                                            setSelectedAssessors(off.assessors.map(a => ({ value: a.assessor.id, label: `${a.assessor.user.name} (${a.assessor.user.email})` })));
+                                                        }} className="p-2 hover:bg-blue-100 rounded-full text-blue-500"><PencilIcon className="h-5 w-5" /></button>
+                                                        <button onClick={() => setIsDeletingOffering(off)} className="p-2 hover:bg-red-100 rounded-full text-red-500"><TrashIcon className="h-5 w-5" /></button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         ))}
                                     </div>
                                 </Accordion>
                             ))}
-                            {offerings.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 mt-8">No classes scheduled for this semester.</p>}
-                            {hasMoreOfferings && (
-                                <div className="flex justify-center mt-4">
-                                    <button
-                                        onClick={handleLoadMoreOfferings}
-                                        className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
-                                    >
-                                        Load More
-                                    </button>
-                                </div>
-                            )}
-                        </motion.div>
-                        <motion.div variants={itemVariants}>
-                            <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Unscheduled Modules</h2>
+                            {offerings.length === 0 && <p className="text-center text-gray-500 mt-8">No classes scheduled.</p>}
+                            {hasMoreOfferings && <button onClick={handleLoadMoreOfferings} className="mt-4 w-full py-2 bg-blue-500 text-white rounded-lg">Load More</button>}
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-semibold mb-4">Unscheduled Modules</h2>
                             <div className="space-y-4">
-                                {filteredModules.map(cm => (
-                                    <motion.div key={cm.module_id} variants={itemVariants} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
+                                {filteredModules.map(m => (
+                                    <div key={m.module_id} className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
                                         <div className="flex items-center gap-4 mb-2">
-                                            <BookOpenIcon className="h-8 w-8 text-blue-500 dark:text-blue-400" />
+                                            <BookOpenIcon className="h-8 w-8 text-blue-500" />
                                             <div>
-                                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">{cm.title}</h3>
-                                                <p className="text-sm text-gray-600 dark:text-gray-300">Year {cm.yearOfStudy}, Sem {cm.semesterOfStudy}</p>
+                                                <h3 className="font-bold">{m.title}</h3>
+                                                <p className="text-sm text-gray-500">Year {m.yearOfStudy}, Sem {m.semesterOfStudy}</p>
                                             </div>
                                         </div>
-                                        {isLead && (
-                                            <button onClick={() => setIsAssigning(cm)} className="w-full mt-2 flex items-center justify-center gap-2 text-sm bg-blue-500 text-white py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors">
-                                                <PlusIcon className="h-4 w-4" />
-                                                Assign Assessors
-                                            </button>
-                                        )}
-                                    </motion.div>
+                                        {isLead && <button onClick={() => setIsAssigning(m)} className="w-full mt-2 py-2 bg-blue-500 text-white rounded-lg">Assign Assessors</button>}
+                                    </div>
                                 ))}
-                                {filteredModules.length === 0 && <p className="text-center text-gray-500 dark:text-gray-400 mt-8">All modules for this year and semester are scheduled.</p>}
+                                {filteredModules.length === 0 && <p className="text-center text-gray-500 mt-8">All modules scheduled.</p>}
                             </div>
-                        </motion.div>
+                        </div>
                     </div>
                 )}
             </motion.div>
-            <Toast
-                message={toastMessage}
-                type={toastType}
-                onClose={() => setShowToast(false)}
-                show={showToast}
-            />
-        </>
+            <Toast message={toastMessage} type={toastType} onClose={() => setShowToast(false)} show={showToast} />
+        </div>
     );
 };
 
