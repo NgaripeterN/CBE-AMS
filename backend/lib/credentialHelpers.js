@@ -278,13 +278,3 @@ module.exports = {
     getDescriptor,
     isPassing,
 };
-
-module.exports = {
-    checkAndIssueCredentials,
-    updateLocalMicroCredential,
-    performOnChainMicroCredentialIssuance,
-    updateLocalCourseCredential,
-    performOnChainCourseCredentialIssuance,
-    getDescriptor,
-    isPassing,
-};
