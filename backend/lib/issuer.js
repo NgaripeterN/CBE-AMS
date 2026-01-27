@@ -116,8 +116,8 @@ const issueCredential = async (student_id, module_id, type, score, descriptor, d
   await credentialIssuanceQueue.add({ student_id, module_id, type, score, descriptor, demonstratedCompetencies });
 };
 
-const issueCourseCredential = async (student_id, course_id, descriptor, demonstratedCompetencies, evidenceModules, transcript) => {
-    await credentialIssuanceQueue.add({ student_id, course_id, descriptor, demonstratedCompetencies, evidenceModules, transcript, type: 'COURSE_CREDENTIAL' });
+const issueCourseCredential = async (student_id, course_id, score, descriptor, demonstratedCompetencies, evidenceModules, transcript) => {
+    await credentialIssuanceQueue.add({ student_id, course_id, score, descriptor, demonstratedCompetencies, evidenceModules, transcript, type: 'COURSE_CREDENTIAL' });
 };
 
 module.exports = {

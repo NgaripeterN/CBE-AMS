@@ -118,7 +118,7 @@ const performOnChainMicroCredentialIssuance = async (studentId, moduleId, type, 
 
 const performOnChainCourseCredentialIssuance = async (studentId, courseId, score, descriptor, demonstratedCompetencies, evidenceModules, transcript) => {
     try {
-        await issueCourseCredential(studentId, courseId, descriptor, demonstratedCompetencies, evidenceModules, transcript);
+        await issueCourseCredential(studentId, courseId, score, descriptor, demonstratedCompetencies, evidenceModules, transcript);
         console.log(`CourseCredential for student ${studentId}, course ${courseId} added to issuance queue.`);
     } catch (error) {
         console.error(`Error adding CourseCredential to issuance queue:`, error);
