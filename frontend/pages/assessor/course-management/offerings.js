@@ -417,7 +417,7 @@ const OfferingsPage = () => {
                         <div className="p-6">
                             <h2 className="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">Scheduling Conflict</h2>
                             <p className="text-gray-700 dark:text-gray-300 mb-6">
-                                An offering for "{conflictDetails.moduleTitle}" already exists in the selected semester.
+                                An offering for &quot;{conflictDetails.moduleTitle}&quot; already exists in the selected semester.
                                 Would you like to <strong>Replace</strong> it with this one?
                             </p>
                             <div className="flex justify-end gap-4">
