@@ -142,7 +142,12 @@ const MyModulesPage = () => {
                           <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
                             {module.title}
                           </h2>
-                          <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
+                          <p className="text-muted-foreground font-mono text-sm tracking-tight mb-2">{module.moduleCode}</p>
+                          {(module.yearOfStudy && module.semesterOfStudy) && (
+                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              Year {module.yearOfStudy}, Sem {module.semesterOfStudy}
+                            </div>
+                          )}
                         </div>
                         <div className="px-8 pb-8">
                           <div className="w-full text-center px-4 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-sm group-hover:bg-primary/90 transition-colors">
