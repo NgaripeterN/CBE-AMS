@@ -565,6 +565,7 @@ const getMyModules = async (req, res) => {
 
     const completedModuleIds = new Set(microCredentials.map(mc => mc.module_id));
 
+// ... existing code ...
     // 3. Filter in memory based on tab
     const filteredEnrollments = allEnrollments.filter(e => {
         const isCompleted = completedModuleIds.has(e.module.module_id);
@@ -575,10 +576,26 @@ const getMyModules = async (req, res) => {
         }
     });
 
+    // Sort by Year of Study then Semester of Study
+    filteredEnrollments.sort((a, b) => {
+        const yearA = a.module.yearOfStudy || 999; // Default to high number if null to put at end
+        const yearB = b.module.yearOfStudy || 999;
+        
+        if (yearA !== yearB) {
+            return yearA - yearB;
+        }
+
+        const semA = a.module.semesterOfStudy || 999;
+        const semB = b.module.semesterOfStudy || 999;
+        
+        return semA - semB;
+    });
+
     const totalFiltered = filteredEnrollments.length;
 
     // 4. Paginate the filtered list
     const paginatedEnrollments = filteredEnrollments.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+// ... existing code ...
 
     const modules = paginatedEnrollments.map((e) => ({
       ...e.module,
