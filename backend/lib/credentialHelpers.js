@@ -65,14 +65,19 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
     });
     const student = await prisma.student.findUnique({ where: { id: studentId }, include: { user: true } });
 
+    // Ensure we don't have undefined in the array for Prisma
+    const safeEvidenceModuleIds = (course.credentialModuleIds || []).filter(id => id !== undefined && id !== null);
+
     const payload = buildCredentialPayload({
         student,
         course,
         type: 'COURSE_CREDENTIAL',
-        score: null, // Course credentials don't have a direct score in this context
+        score: null, 
         descriptor,
         demonstratedCompetencies: uniqueCourseCompetencies,
-        evidenceModuleIds: course.credentialModuleIds,
+        evidenceModuleIds: safeEvidenceModuleIds,
+        evidenceModules: safeEvidenceModuleIds, // Providing this as fallback for the payload
+        transcript: [], // Providing empty array instead of undefined
     });
     
     const courseCredential = await prisma.courseCredential.upsert({
@@ -85,13 +90,13 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
         update: {
             descriptor,
             payloadJson: payload,
-            status: 'PENDING', // Always PENDING initially
+            status: 'PENDING', 
         },
         create: {
             student_id: studentId,
             course_id: courseId,
             descriptor,
-            evidenceModuleIds: course.credentialModuleIds,
+            evidenceModuleIds: safeEvidenceModuleIds,
             payloadJson: payload,
             status: 'PENDING',
             issuedAt: null,
