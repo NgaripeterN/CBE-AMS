@@ -17,9 +17,18 @@ const TranscriptPage = () => {
       try {
         const transcriptRes = await api.get('/student/transcript');
         const years = Object.keys(transcriptRes.data.yearlySummary).sort((a, b) => b - a);
-        setAvailableTranscriptYears(years.map(year => ({ value: year, label: `Year ${year}` })));
-        if (years.length > 0) {
-          setSelectedYear({ value: years[0], label: `Year ${years[0]}` });
+        const hasCourseCredential = transcriptRes.data.courseSummaries && transcriptRes.data.courseSummaries.length > 0;
+
+        let yearOptions = years.map(year => ({ value: year, label: `Year ${year}` }));
+        
+        if (hasCourseCredential && years.length > 0) {
+          yearOptions.unshift({ value: 'all', label: 'Combined (All Years)' });
+        }
+
+        setAvailableTranscriptYears(yearOptions);
+
+        if (yearOptions.length > 0) {
+          setSelectedYear(yearOptions[0]);
         }
       } catch (err) {
         console.error('Failed to fetch transcript years', err);
@@ -36,8 +45,9 @@ const TranscriptPage = () => {
     }
 
     try {
-      const yearParam = selectedYear.value;
-      const url = `/student/transcript?year=${yearParam}&format=${formatType}`;
+      const isCombined = selectedYear.value === 'all';
+      const yearParam = isCombined ? '' : selectedYear.value;
+      const url = `/student/transcript?${yearParam ? `year=${yearParam}&` : ''}format=${formatType}`;
       
       const config = {
           responseType: formatType === 'pdf' ? 'blob' : 'json'
@@ -45,7 +55,9 @@ const TranscriptPage = () => {
 
       const response = await api.get(url, config);
 
-      const filename = `Transcript_Year_${String(yearParam)}_${String(user?.name || 'Student')}.${String(formatType)}`;
+      const filename = isCombined
+        ? `Transcript_Combined_${String(user?.name || 'Student')}.${String(formatType)}`
+        : `Transcript_Year_${String(yearParam)}_${String(user?.name || 'Student')}.${String(formatType)}`;
 
       if (formatType === 'pdf') {
         const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -68,7 +80,7 @@ const TranscriptPage = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
-      toast.success(`Transcript for Year ${selectedYear.value} downloaded successfully as ${String(formatType).toUpperCase()}!`);
+      toast.success(`${isCombined ? 'Combined Transcript' : `Transcript for Year ${selectedYear.value}`} downloaded successfully as ${String(formatType).toUpperCase()}!`);
     } catch (err) {
       console.error('Error downloading transcript:', err);
       let errorMessage = 'Failed to download transcript.';

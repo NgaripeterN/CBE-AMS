@@ -134,7 +134,10 @@ const generatePdfTranscript = (data) => {
             doc.fontSize(12).font(fonts.italic).fill(colors.secondary).text('No module records found.', 50, yPos);
             yPos += 20;
         } else {
-            for (const year in data.yearlySummary) {
+            // Sort years in descending order
+            const sortedYears = Object.keys(data.yearlySummary).sort((a, b) => b - a);
+
+            for (const year of sortedYears) {
                 checkPageBreak(100);
                 
                 // Year Sub-header
