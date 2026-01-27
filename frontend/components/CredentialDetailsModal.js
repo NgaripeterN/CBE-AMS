@@ -51,11 +51,16 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
             <p><strong>Description:</strong> {description}</p>
             <p><strong>Narrative:</strong> {payload.badge?.criteria?.narrative || 'No narrative available.'}</p>
             { (payload.badge?.result || payload.result) && (
-              <div className="mt-2 p-3 bg-muted rounded-md">
+              <div className="mt-2 p-3 bg-muted rounded-md space-y-2">
                 {(payload.badge?.result?.score !== undefined && payload.badge?.result?.score !== null) || (payload.result?.score !== undefined && payload.result?.score !== null) ? (
                   <p><strong>Score:</strong> <span className="font-mono">{(payload.badge?.result?.score || payload.result?.score)?.toFixed(2)}%</span></p>
                 ) : null}
-                <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor)}</span></p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor)}</span></p>
+                  {(payload.credentialSubject?.score !== undefined || payload.result?.score !== undefined) && (
+                    <p><strong>Weighted Average:</strong> <span className="font-mono text-primary font-bold">{(payload.credentialSubject?.score || payload.result?.score)?.toFixed(2)}%</span></p>
+                  )}
+                </div>
               </div>
             )}
           </div>
