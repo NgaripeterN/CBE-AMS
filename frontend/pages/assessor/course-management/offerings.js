@@ -53,9 +53,13 @@ const OfferingsPage = () => {
     const [yearsOfStudy, setYearsOfStudy] = useState([]);
 
     const [isAssigning, setIsAssigning] = useState(null);
-    const [isEditingAssessors, setIsEditingAssessors] = useState(null);
+    const [isEditingOffering, setIsEditingOffering] = useState(null); // New state for editing offering
 
     const [selectedAssessors, setSelectedAssessors] = useState([]); // Changed to array
+
+    const [editingOfferingAcademicYearId, setEditingOfferingAcademicYearId] = useState('');
+    const [editingOfferingSemesterId, setEditingOfferingSemesterId] = useState('');
+    const [editingOfferingSemesters, setEditingOfferingSemesters] = useState([]);
 
     const checkIfLead = useCallback(async () => {
         if (user && user.role === 'LEAD') {
@@ -94,9 +98,18 @@ const OfferingsPage = () => {
         }
     }, [router.isReady, user, checkIfLead, fetchInitialData]);
 
-    const fetchSemesters = useCallback(async (yearId) => {
-        const res = await api.get(`/curriculum/semesters/${yearId}`);
-        setSemesters(res.data);
+    const fetchSemesters = useCallback(async (yearId, setter = setSemesters) => {
+        if (!yearId) {
+            setter([]);
+            return;
+        }
+        try {
+            const res = await api.get(`/curriculum/semesters/${yearId}`);
+            setter(res.data);
+        } catch (error) {
+            console.error("Error fetching semesters:", error);
+            setter([]);
+        }
     }, []);
 
     useEffect(() => {
@@ -104,6 +117,14 @@ const OfferingsPage = () => {
             fetchSemesters(selectedYearId);
         }
     }, [selectedYearId, fetchSemesters]);
+
+    useEffect(() => {
+        if (isEditingOffering && editingOfferingAcademicYearId) {
+            fetchSemesters(editingOfferingAcademicYearId, setEditingOfferingSemesters);
+        } else if (!editingOfferingAcademicYearId) {
+            setEditingOfferingSemesters([]);
+        }
+    }, [isEditingOffering, editingOfferingAcademicYearId, fetchSemesters]);
 
     const fetchOfferings = useCallback(async (page = 1, append = false) => {
         if (!selectedSemesterId) return [];
@@ -195,15 +216,29 @@ const OfferingsPage = () => {
         setSelectedAssessors([]);
     };
 
-    const handleEditAssessors = async (e) => {
+
+
+    const handleUpdateOffering = async (e) => {
         e.preventDefault();
-        const assessorIds = selectedAssessors.map(a => a.value); // Extract values
-        await api.put(`/curriculum/offerings/${isEditingAssessors.id}/assessors`, {
-            assessorIds: assessorIds,
-        });
-        filterModules();
-        setIsEditingAssessors(null);
-        setSelectedAssessors([]);
+        if (!isEditingOffering) return;
+
+        try {
+            const assessorIds = selectedAssessors.map(a => a.value); // Extract values
+            const res = await api.put(`/curriculum/offerings/${isEditingOffering.id}`, {
+                semesterId: editingOfferingSemesterId,
+                assessorIds: assessorIds,
+                // moduleId: isEditingOffering.moduleId, // Module ID doesn't change
+            });
+            console.log('Offering updated:', res.data);
+            filterModules(); // Re-fetch and re-filter to update the list
+            setIsEditingOffering(null);
+            setEditingOfferingAcademicYearId('');
+            setEditingOfferingSemesterId('');
+            setSelectedAssessors([]); // Clear selected assessors
+        } catch (error) {
+            console.error('Error updating offering:', error);
+            alert(error.response?.data?.error || 'Failed to update offering.');
+        }
     };
     
     const containerVariants = {
@@ -254,32 +289,62 @@ const OfferingsPage = () => {
                     </Modal>
                 )}
 
-                {isEditingAssessors && isLead && (
-                    <Modal onClose={() => setIsEditingAssessors(null)}>
-                        <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Assessors for {isEditingAssessors.module.title}</h2>
-                            <form onSubmit={handleEditAssessors}>
-                                <AsyncSelect
-                                    cacheOptions
-                                    defaultOptions
-                                    isMulti
-                                    loadOptions={loadAssessorOptions}
-                                    styles={customStyles}
-                                    onChange={setSelectedAssessors}
-                                    value={selectedAssessors}
-                                    placeholder="Search for assessors..."
-                                    isClearable
-                                    className="mb-4"
-                                />
-                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={selectedAssessors.length === 0}>
-                                    <PencilIcon className="h-5 w-5" />
-                                    Update Assessors
-                                </button>
-                            </form>
-                        </div>
-                    </Modal>
-                )}
-            </AnimatePresence>
+                            {isEditingOffering && isLead && (
+                                <Modal onClose={() => setIsEditingOffering(null)}>
+                                    <div className="p-6">
+                                        <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Offering: {isEditingOffering.module.title}</h2>
+                                        <form onSubmit={handleUpdateOffering}>
+                                            <div className="mb-4">
+                                                <label htmlFor="editAcademicYear" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Academic Year</label>
+                                                <select
+                                                    id="editAcademicYear"
+                                                    value={editingOfferingAcademicYearId}
+                                                    onChange={e => {
+                                                        setEditingOfferingAcademicYearId(e.target.value);
+                                                        setEditingOfferingSemesterId(''); // Reset semester when academic year changes
+                                                    }}
+                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                                >
+                                                    <option value="">Select Academic Year</option>
+                                                    {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="mb-4">
+                                                <label htmlFor="editSemester" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semester</label>
+                                                <select
+                                                    id="editSemester"
+                                                    value={editingOfferingSemesterId}
+                                                    onChange={e => setEditingOfferingSemesterId(e.target.value)}
+                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                                    disabled={!editingOfferingAcademicYearId}
+                                                >
+                                                    <option value="">Select Semester</option>
+                                                    {editingOfferingSemesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="mb-4">
+                                                <label htmlFor="editAssessors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assessors</label>
+                                                <AsyncSelect
+                                                    cacheOptions
+                                                    defaultOptions
+                                                    isMulti
+                                                    loadOptions={loadAssessorOptions}
+                                                    styles={customStyles}
+                                                    onChange={setSelectedAssessors}
+                                                    value={selectedAssessors}
+                                                    placeholder="Search for assessors..."
+                                                    isClearable
+                                                    className="mb-4"
+                                                />
+                                            </div>
+                                            <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={!editingOfferingAcademicYearId || !editingOfferingSemesterId}>
+                                                <PencilIcon className="h-5 w-5" />
+                                                Update Offering
+                                            </button>
+                                        </form>
+                                    </div>
+                                </Modal>
+                            )}            </AnimatePresence>
 
             <motion.div initial="hidden" animate="visible" variants={containerVariants}>
                 <div className="flex items-center mb-6">
@@ -324,19 +389,23 @@ const OfferingsPage = () => {
                                                         </div>
                                                     </div>
                                                     {isLead && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setIsEditingAssessors(offering);
-                                                                setSelectedAssessors(offering.assessors.map(oa => ({
-                                                                    value: oa.assessor.id,
-                                                                    label: `${oa.assessor.user.name} (${oa.assessor.user.email})`
-                                                                })));
-                                                            }}
-                                                            className="p-2 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                                            title="Edit Assessors"
-                                                        >
-                                                            <PencilIcon className="h-5 w-5" />
-                                                        </button>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsEditingOffering(offering);
+                                                                    setEditingOfferingAcademicYearId(offering.semester.academicYear.id);
+                                                                    setEditingOfferingSemesterId(offering.semester.id);
+                                                                    setSelectedAssessors(offering.assessors.map(oa => ({
+                                                                        value: oa.assessor.id,
+                                                                        label: `${oa.assessor.user.name} (${oa.assessor.user.email})`
+                                                                    })));
+                                                                }}
+                                                                className="p-2 rounded-full text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                                title="Edit Offering"
+                                                            >
+                                                                <PencilIcon className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </motion.div>

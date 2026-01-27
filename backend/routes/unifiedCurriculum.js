@@ -356,6 +356,11 @@ router.get('/offerings/:semesterId', isAuthenticated, isCourseLead, async (req, 
             take: limitNum,
             include: {
                 module: true,
+                semester: {
+                    include: {
+                        academicYear: true,
+                    },
+                },
                 assessors: {
                     include: {
                         assessor: {
@@ -418,6 +423,96 @@ router.put('/offerings/:offeringId/assessors', isAuthenticated, isCourseLead, as
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error updating offering assessors.' });
+    }
+});
+
+router.put('/offerings/:offeringId', isAuthenticated, isCourseLead, async (req, res) => {
+    const { offeringId } = req.params;
+    const { moduleId, semesterId, assessorIds } = req.body; // Added assessorIds
+
+    if (!moduleId && !semesterId && !assessorIds) {
+        return res.status(400).json({ error: 'At least one of moduleId, semesterId, or assessorIds must be provided for update.' });
+    }
+
+    try {
+        const offeringToUpdate = await prisma.offering.findUnique({ where: { id: offeringId } });
+        if (!offeringToUpdate) {
+            return res.status(404).json({ error: 'Offering not found.' });
+        }
+
+        // Prevent updating to an existing unique combination of moduleId and semesterId
+        if (moduleId || semesterId) {
+            const targetModuleId = moduleId || offeringToUpdate.moduleId;
+            const targetSemesterId = semesterId || offeringToUpdate.semesterId;
+
+            const existingOffering = await prisma.offering.findFirst({
+                where: {
+                    moduleId: targetModuleId,
+                    semesterId: targetSemesterId,
+                    NOT: { id: offeringId }, // Exclude the current offering being updated
+                },
+            });
+
+            if (existingOffering) {
+                return res.status(400).json({ error: 'An offering for this module already exists in the selected semester.' });
+            }
+        }
+
+        const transactionOperations = [];
+        const dataToUpdate = {};
+
+        if (moduleId) dataToUpdate.moduleId = moduleId;
+        if (semesterId) dataToUpdate.semesterId = semesterId;
+
+        if (assessorIds !== undefined) { // Check if assessorIds is explicitly provided
+            transactionOperations.push(
+                prisma.offeringAssignment.deleteMany({
+                    where: { offeringId: offeringId },
+                })
+            );
+            if (assessorIds.length > 0) {
+                transactionOperations.push(
+                    ...assessorIds.map(assessorId =>
+                        prisma.offeringAssignment.create({
+                            data: {
+                                offeringId: offeringId,
+                                assessorId: assessorId,
+                            },
+                        })
+                    )
+                );
+            }
+        }
+
+        transactionOperations.push(
+            prisma.offering.update({
+                where: { id: offeringId },
+                data: dataToUpdate,
+                include: { // Include necessary relations for the response
+                    module: true,
+                    semester: {
+                        include: {
+                            academicYear: true,
+                        },
+                    },
+                    assessors: {
+                        include: {
+                            assessor: {
+                                include: {
+                                    user: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            })
+        );
+        
+        const [ , updatedOffering] = await prisma.$transaction(transactionOperations);
+        res.status(200).json(updatedOffering);
+    } catch (error) {
+        console.error('Error updating offering:', error);
+        res.status(500).json({ error: 'Error updating offering.' });
     }
 });
 
