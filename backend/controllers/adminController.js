@@ -535,7 +535,6 @@ const deleteCourse = async (req, res) => {
 
           if (offerings.length > 0) {
             const offeringIds = offerings.map(o => o.id);
-            await tx.enrollment.deleteMany({ where: { offeringId: { in: offeringIds } } });
             await tx.offeringAssignment.deleteMany({ where: { offeringId: { in: offeringIds } } });
           }
           
@@ -555,6 +554,9 @@ const deleteCourse = async (req, res) => {
       const moduleIds = modules.map((m) => m.module_id);
 
       if (moduleIds.length > 0) {
+        // Delete enrollments associated with these modules
+        await tx.enrollment.deleteMany({ where: { module_id: { in: moduleIds } } });
+
         // Offerings linked to modules but not semesters (if any)
         await tx.offering.deleteMany({ where: { moduleId: { in: moduleIds } } });
         

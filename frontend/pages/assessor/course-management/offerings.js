@@ -4,11 +4,13 @@ import AsyncSelect from 'react-select/async';
 import { useTheme } from 'next-themes';
 import api from '../../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeftIcon, PlusIcon, UserPlusIcon, CalendarDaysIcon, BookOpenIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PlusIcon, UserPlusIcon, CalendarDaysIcon, BookOpenIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { customStyles } from '../../../styles/react-select-styles';
 import Accordion from '../../../components/Accordion';
 import useAuth from '../../../hooks/useAuth';
 import { getLeadCourse } from '../../../lib/api';
+import Toast from '../../../components/Toast';
+import ConfirmDeleteModal from '../../../components/ConfirmDeleteModal';
 
 const Modal = ({ children, onClose }) => (
     <motion.div
@@ -53,13 +55,20 @@ const OfferingsPage = () => {
     const [yearsOfStudy, setYearsOfStudy] = useState([]);
 
     const [isAssigning, setIsAssigning] = useState(null);
-    const [isEditingOffering, setIsEditingOffering] = useState(null); // New state for editing offering
+    const [isEditingOffering, setIsEditingOffering] = useState(null);
 
-    const [selectedAssessors, setSelectedAssessors] = useState([]); // Changed to array
+    const [selectedAssessors, setSelectedAssessors] = useState([]);
 
     const [editingOfferingAcademicYearId, setEditingOfferingAcademicYearId] = useState('');
     const [editingOfferingSemesterId, setEditingOfferingSemesterId] = useState('');
     const [editingOfferingSemesters, setEditingOfferingSemesters] = useState([]);
+
+    const [isDeletingOffering, setIsDeletingOffering] = useState(null);
+    const [conflictDetails, setConflictDetails] = useState(null);
+
+    const [toastMessage, setToastMessage] = useState(null);
+    const [toastType, setToastType] = useState(null);
+    const [showToast, setShowToast] = useState(false);
 
     const checkIfLead = useCallback(async () => {
         if (user && user.role === 'LEAD') {
@@ -153,17 +162,15 @@ const OfferingsPage = () => {
     const filterModules = useCallback(async () => {
         if (!selectedSemesterId || !selectedYearOfStudy) {
             setFilteredModules([]);
-            setOfferings([]); // Clear offerings when filters are not fully selected
+            setOfferings([]);
             setOfferingsPage(1);
             setOfferingsTotalPages(1);
             setHasMoreOfferings(false);
             return;
         }
 
-        // Fetch offerings for the first page
         const newOfferings = await fetchOfferings(1, false);
-
-        const offeredModuleIds = newOfferings.map(o => o.moduleId); // Use the newly fetched offerings
+        const offeredModuleIds = newOfferings.map(o => o.moduleId);
 
         const selectedSemester = semesters.find(s => s.id === selectedSemesterId);
         if (!selectedSemester) return;
@@ -205,42 +212,92 @@ const OfferingsPage = () => {
 
     const handleAssignAssessor = async (e) => {
         e.preventDefault();
-        const assessorIds = selectedAssessors.map(a => a.value); // Extract values
-        await api.post('/curriculum/offerings', {
-            moduleId: isAssigning.module_id,
-            semesterId: selectedSemesterId,
-            assessorIds: assessorIds, // Pass array
-        });
-        filterModules();
-        setIsAssigning(null);
-        setSelectedAssessors([]);
+        const assessorIds = selectedAssessors.map(a => a.value);
+        try {
+            await api.post('/curriculum/offerings', {
+                moduleId: isAssigning.module_id,
+                semesterId: selectedSemesterId,
+                assessorIds: assessorIds,
+            });
+            filterModules();
+            setIsAssigning(null);
+            setSelectedAssessors([]);
+            setToastMessage('Module assigned and assessors set successfully!');
+            setToastType('success');
+            setShowToast(true);
+        } catch (error) {
+            console.error("Error assigning module and assessors:", error);
+            setToastMessage(error.response?.data?.error || 'Failed to assign module and assessors.');
+            setToastType('error');
+            setShowToast(true);
+        }
     };
 
-
-
     const handleUpdateOffering = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         if (!isEditingOffering) return;
 
         try {
-            const assessorIds = selectedAssessors.map(a => a.value); // Extract values
+            const assessorIds = selectedAssessors.map(a => a.value);
             const res = await api.put(`/curriculum/offerings/${isEditingOffering.id}`, {
                 semesterId: editingOfferingSemesterId,
                 assessorIds: assessorIds,
-                // moduleId: isEditingOffering.moduleId, // Module ID doesn't change
             });
             console.log('Offering updated:', res.data);
-            filterModules(); // Re-fetch and re-filter to update the list
+            filterModules();
             setIsEditingOffering(null);
             setEditingOfferingAcademicYearId('');
             setEditingOfferingSemesterId('');
-            setSelectedAssessors([]); // Clear selected assessors
+            setSelectedAssessors([]);
+            setToastMessage('Offering updated successfully!');
+            setToastType('success');
+            setShowToast(true);
         } catch (error) {
             console.error('Error updating offering:', error);
-            alert(error.response?.data?.error || 'Failed to update offering.');
+            if (error.response?.status === 409) {
+                setConflictDetails(error.response.data.conflict);
+            } else {
+                setToastMessage(error.response?.data?.error || 'Failed to update offering.');
+                setToastType('error');
+                setShowToast(true);
+            }
         }
     };
-    
+
+    const handleDeleteOffering = async () => {
+        if (!isDeletingOffering) return;
+        try {
+            await api.delete(`/curriculum/offerings/${isDeletingOffering.id}`);
+            setToastMessage('Offering deleted successfully.');
+            setToastType('success');
+            setShowToast(true);
+            filterModules();
+            setIsDeletingOffering(null);
+        } catch (error) {
+            console.error('Error deleting offering:', error);
+            setToastMessage(error.response?.data?.error || 'Failed to delete offering.');
+            setToastType('error');
+            setShowToast(true);
+        }
+    };
+
+    const handleConfirmReplace = async () => {
+        if (!conflictDetails) return;
+        try {
+            await api.delete(`/curriculum/offerings/${conflictDetails.offeringId}`);
+            setConflictDetails(null);
+            await handleUpdateOffering();
+            setToastMessage('Conflict resolved: Old offering replaced and current one updated.');
+            setToastType('success');
+            setShowToast(true);
+        } catch (error) {
+            console.error('Error resolving conflict:', error);
+            setToastMessage('Failed to resolve conflict automatically.');
+            setToastType('error');
+            setShowToast(true);
+        }
+    };
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -271,7 +328,7 @@ const OfferingsPage = () => {
                                 <AsyncSelect
                                     cacheOptions
                                     defaultOptions
-                                    isMulti // Enable multi-select
+                                    isMulti
                                     loadOptions={loadAssessorOptions}
                                     styles={customStyles}
                                     onChange={setSelectedAssessors}
@@ -289,62 +346,98 @@ const OfferingsPage = () => {
                     </Modal>
                 )}
 
-                            {isEditingOffering && isLead && (
-                                <Modal onClose={() => setIsEditingOffering(null)}>
-                                    <div className="p-6">
-                                        <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Offering: {isEditingOffering.module.title}</h2>
-                                        <form onSubmit={handleUpdateOffering}>
-                                            <div className="mb-4">
-                                                <label htmlFor="editAcademicYear" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Academic Year</label>
-                                                <select
-                                                    id="editAcademicYear"
-                                                    value={editingOfferingAcademicYearId}
-                                                    onChange={e => {
-                                                        setEditingOfferingAcademicYearId(e.target.value);
-                                                        setEditingOfferingSemesterId(''); // Reset semester when academic year changes
-                                                    }}
-                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
-                                                >
-                                                    <option value="">Select Academic Year</option>
-                                                    {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="mb-4">
-                                                <label htmlFor="editSemester" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semester</label>
-                                                <select
-                                                    id="editSemester"
-                                                    value={editingOfferingSemesterId}
-                                                    onChange={e => setEditingOfferingSemesterId(e.target.value)}
-                                                    className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
-                                                    disabled={!editingOfferingAcademicYearId}
-                                                >
-                                                    <option value="">Select Semester</option>
-                                                    {editingOfferingSemesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="mb-4">
-                                                <label htmlFor="editAssessors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assessors</label>
-                                                <AsyncSelect
-                                                    cacheOptions
-                                                    defaultOptions
-                                                    isMulti
-                                                    loadOptions={loadAssessorOptions}
-                                                    styles={customStyles}
-                                                    onChange={setSelectedAssessors}
-                                                    value={selectedAssessors}
-                                                    placeholder="Search for assessors..."
-                                                    isClearable
-                                                    className="mb-4"
-                                                />
-                                            </div>
-                                            <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={!editingOfferingAcademicYearId || !editingOfferingSemesterId}>
-                                                <PencilIcon className="h-5 w-5" />
-                                                Update Offering
-                                            </button>
-                                        </form>
-                                    </div>
-                                </Modal>
-                            )}            </AnimatePresence>
+                {isEditingOffering && isLead && (
+                    <Modal onClose={() => setIsEditingOffering(null)}>
+                        <div className="p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Edit Offering: {isEditingOffering.module.title}</h2>
+                            <form onSubmit={handleUpdateOffering}>
+                                <div className="mb-4">
+                                    <label htmlFor="editAcademicYear" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Academic Year</label>
+                                    <select
+                                        id="editAcademicYear"
+                                        value={editingOfferingAcademicYearId}
+                                        onChange={e => {
+                                            setEditingOfferingAcademicYearId(e.target.value);
+                                            setEditingOfferingSemesterId('');
+                                        }}
+                                        className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                    >
+                                        <option value="">Select Academic Year</option>
+                                        {academicYears.map(year => <option key={year.id} value={year.id}>{year.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="editSemester" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semester</label>
+                                    <select
+                                        id="editSemester"
+                                        value={editingOfferingSemesterId}
+                                        onChange={e => setEditingOfferingSemesterId(e.target.value)}
+                                        className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                        disabled={!editingOfferingAcademicYearId}
+                                    >
+                                        <option value="">Select Semester</option>
+                                        {editingOfferingSemesters.map(semester => <option key={semester.id} value={semester.id}>{semester.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="editAssessors" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assessors</label>
+                                    <AsyncSelect
+                                        cacheOptions
+                                        defaultOptions
+                                        isMulti
+                                        loadOptions={loadAssessorOptions}
+                                        styles={customStyles}
+                                        onChange={setSelectedAssessors}
+                                        value={selectedAssessors}
+                                        placeholder="Search for assessors..."
+                                        isClearable
+                                        className="mb-4"
+                                    />
+                                </div>
+                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition-colors" disabled={!editingOfferingAcademicYearId || !editingOfferingSemesterId}>
+                                    <PencilIcon className="h-5 w-5" />
+                                    Update Offering
+                                </button>
+                            </form>
+                        </div>
+                    </Modal>
+                )}
+
+                {isDeletingOffering && isLead && (
+                    <ConfirmDeleteModal
+                        title="Delete Offering?"
+                        message={`Are you sure you want to delete the offering for "${isDeletingOffering.module.title}"? This will also remove all associated assignments.`}
+                        onConfirm={handleDeleteOffering}
+                        onClose={() => setIsDeletingOffering(null)}
+                    />
+                )}
+
+                {conflictDetails && isLead && (
+                    <Modal onClose={() => setConflictDetails(null)}>
+                        <div className="p-6">
+                            <h2 className="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">Scheduling Conflict</h2>
+                            <p className="text-gray-700 dark:text-gray-300 mb-6">
+                                An offering for "{conflictDetails.moduleTitle}" already exists in the selected semester.
+                                Would you like to <strong>Replace</strong> it with this one?
+                            </p>
+                            <div className="flex justify-end gap-4">
+                                <button
+                                    onClick={() => setConflictDetails(null)}
+                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmReplace}
+                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                >
+                                    Replace Existing
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+                )}
+            </AnimatePresence>
 
             <motion.div initial="hidden" animate="visible" variants={containerVariants}>
                 <div className="flex items-center mb-6">
@@ -405,6 +498,13 @@ const OfferingsPage = () => {
                                                             >
                                                                 <PencilIcon className="h-5 w-5" />
                                                             </button>
+                                                            <button
+                                                                onClick={() => setIsDeletingOffering(offering)}
+                                                                className="p-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                                title="Delete Offering"
+                                                            >
+                                                                <TrashIcon className="h-5 w-5" />
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </div>
@@ -451,6 +551,12 @@ const OfferingsPage = () => {
                     </div>
                 )}
             </motion.div>
+            <Toast
+                message={toastMessage}
+                type={toastType}
+                onClose={() => setShowToast(false)}
+                show={showToast}
+            />
         </>
     );
 };

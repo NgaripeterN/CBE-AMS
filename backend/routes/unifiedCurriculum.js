@@ -430,7 +430,7 @@ router.put('/offerings/:offeringId', isAuthenticated, isCourseLead, async (req, 
     const { offeringId } = req.params;
     const { moduleId, semesterId, assessorIds } = req.body; // Added assessorIds
 
-    if (!moduleId && !semesterId && !assessorIds) {
+    if (!moduleId && !semesterId && assessorIds === undefined) {
         return res.status(400).json({ error: 'At least one of moduleId, semesterId, or assessorIds must be provided for update.' });
     }
 
@@ -451,10 +451,19 @@ router.put('/offerings/:offeringId', isAuthenticated, isCourseLead, async (req, 
                     semesterId: targetSemesterId,
                     NOT: { id: offeringId }, // Exclude the current offering being updated
                 },
+                include: {
+                    module: true, // Include module to get its title for the error message
+                },
             });
 
             if (existingOffering) {
-                return res.status(400).json({ error: 'An offering for this module already exists in the selected semester.' });
+                return res.status(409).json({
+                    error: 'An offering for this module already exists in the selected semester.',
+                    conflict: {
+                        offeringId: existingOffering.id,
+                        moduleTitle: existingOffering.module.title,
+                    },
+                });
             }
         }
 
@@ -508,11 +517,30 @@ router.put('/offerings/:offeringId', isAuthenticated, isCourseLead, async (req, 
             })
         );
         
-        const [ , updatedOffering] = await prisma.$transaction(transactionOperations);
+        const [, updatedOffering] = await prisma.$transaction(transactionOperations);
         res.status(200).json(updatedOffering);
     } catch (error) {
         console.error('Error updating offering:', error);
         res.status(500).json({ error: 'Error updating offering.' });
+    }
+});
+
+router.delete('/offerings/:offeringId', isAuthenticated, isCourseLead, async (req, res) => {
+    const { offeringId } = req.params;
+
+    try {
+        await prisma.$transaction([
+            prisma.offeringAssignment.deleteMany({
+                where: { offeringId: offeringId },
+            }),
+            prisma.offering.delete({
+                where: { id: offeringId },
+            }),
+        ]);
+        res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting offering:', error);
+        res.status(500).json({ error: 'Error deleting offering.' });
     }
 });
 
