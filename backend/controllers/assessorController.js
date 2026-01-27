@@ -116,6 +116,23 @@ const getModules = async (req, res) => {
       };
     }));
 
+    // Sort ALL modules by Academic Year and Semester BEFORE filtering and pagination
+    // This ensures that when we slice for a page, the modules are already in order.
+    allProcessedModules.sort((a, b) => {
+      const aYearStart = new Date(a.academicYear?.startDate || 0).getTime();
+      const bYearStart = new Date(b.academicYear?.startDate || 0).getTime();
+      
+      if (aYearStart !== bYearStart) {
+        // Active: Oldest Year to Newest (Upcoming)
+        // Completed: Newest Year to Oldest
+        return tab === 'active' ? aYearStart - bYearStart : bYearStart - aYearStart;
+      }
+
+      const aSemStart = new Date(a.semester?.startDate || 0).getTime();
+      const bSemStart = new Date(b.semester?.startDate || 0).getTime();
+      return tab === 'active' ? aSemStart - bSemStart : bSemStart - aSemStart;
+    });
+
     // Filter based on tab
     const filteredModules = allProcessedModules.filter(m => {
       if (tab === 'completed') {

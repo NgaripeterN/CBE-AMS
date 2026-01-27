@@ -413,6 +413,7 @@ const MyModules = () => {
   ];
 
   // Group modules by Academic Year, then Semester
+  // We keep the insertion order from the backend which is now sorted.
   const groupedModules = modules.reduce((acc, module) => {
     const year = module.academicYear?.name || 'Other';
     const semester = module.semester?.name || 'Other';
@@ -427,12 +428,11 @@ const MyModules = () => {
     return acc;
   }, {});
 
-  // Sort Years (descending for completed, ascending for active)
-  const sortedYears = Object.keys(groupedModules).sort((a, b) => {
-    if (a === 'Other') return 1;
-    if (b === 'Other') return -1;
-    return activeTab === 'active' ? a.localeCompare(b) : b.localeCompare(a);
-  });
+  // Since the backend already sorts the modules array, 
+  // Object.keys(groupedModules) might still not be perfectly ordered if a year is split across pages,
+  // but the modules within each year will be in order.
+  // To be safe, we just use the keys as they appear.
+  const sortedYears = Object.keys(groupedModules);
 
   return (
     <div className="container mx-auto px-4 py-4">
