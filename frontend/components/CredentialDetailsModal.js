@@ -50,15 +50,15 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
             <h3 className="font-semibold text-lg mb-2">Credential Details</h3>
             <p><strong>Description:</strong> {description}</p>
             <p><strong>Narrative:</strong> {payload.badge?.criteria?.narrative || 'No narrative available.'}</p>
-            { (payload.badge?.result || payload.result) && (
+            { (payload.badge?.result || payload.result || payload.credentialSubject?.score !== undefined) && (
               <div className="mt-2 p-3 bg-muted rounded-md space-y-2">
                 {(payload.badge?.result?.score !== undefined && payload.badge?.result?.score !== null) || (payload.result?.score !== undefined && payload.result?.score !== null) ? (
                   <p><strong>Score:</strong> <span className="font-mono">{(payload.badge?.result?.score || payload.result?.score)?.toFixed(2)}%</span></p>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-4">
-                  <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor)}</span></p>
-                  {(payload.credentialSubject?.score !== undefined || payload.result?.score !== undefined) && (
-                    <p><strong>Weighted Average:</strong> <span className="font-mono text-primary font-bold">{(payload.credentialSubject?.score || payload.result?.score)?.toFixed(2)}%</span></p>
+                  <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor || payload.credentialSubject?.descriptor)}</span></p>
+                  {(payload.badge?.result?.score !== undefined || payload.result?.score !== undefined || payload.credentialSubject?.score !== undefined) && (
+                    <p><strong>Weighted Average:</strong> <span className="font-mono text-primary font-bold">{(payload.badge?.result?.score || payload.result?.score || payload.credentialSubject?.score)?.toFixed(2)}%</span></p>
                   )}
                 </div>
               </div>
