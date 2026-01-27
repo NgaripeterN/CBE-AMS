@@ -102,9 +102,6 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
 };
 
 const performOnChainMicroCredentialIssuance = async (studentId, moduleId, type, score, descriptor, demonstratedCompetencies) => {
-    // We already have the necessary data passed in as arguments
-    // No need to fetch microCredential again with includes
-
     try {
         await issueIssuerCredential(
             studentId,
@@ -115,17 +112,12 @@ const performOnChainMicroCredentialIssuance = async (studentId, moduleId, type, 
             demonstratedCompetencies
         );
         console.log(`MicroCredential for student ${studentId}, module ${moduleId} added to issuance queue.`);
-
     } catch (error) {
         console.error(`Error adding MicroCredential to issuance queue for student ${studentId}, module ${moduleId}:`, error);
-        // Depending on error, you might want to log, alert, or retry
     }
 };
 
 const performOnChainCourseCredentialIssuance = async (studentId, courseId, descriptor, demonstratedCompetencies, evidenceModuleIds) => {
-    // We already have the necessary data passed in as arguments
-    // No need to fetch courseCredential again with includes
-
     try {
         await issueCourseCredential(
             studentId,
@@ -135,10 +127,71 @@ const performOnChainCourseCredentialIssuance = async (studentId, courseId, descr
             evidenceModuleIds
         );
         console.log(`CourseCredential for student ${studentId}, course ${courseId} added to issuance queue.`);
-
     } catch (error) {
         console.error(`Error adding CourseCredential to issuance queue for student ${studentId}, course ${courseId}:`, error);
-        // Depending on error, you might want to log, alert, or retry
+    }
+};
+
+const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent = false) => {
+    console.log(`--- checkAndIssueCourseCredential for student ${studentId}, course ${courseId} ---`);
+    
+    const course = await prisma.course.findUnique({
+        where: { course_id: courseId },
+    });
+
+    if (!course || !course.credentialModuleIds || course.credentialModuleIds.length === 0) {
+        console.log('No required module IDs for this course or course not found.');
+        return;
+    }
+
+    // Check if Course Credential already ISSUED
+    const existingCC = await prisma.courseCredential.findUnique({
+        where: { student_id_course_id: { student_id: studentId, course_id: courseId } }
+    });
+    if (existingCC && existingCC.status === 'ISSUED') {
+        console.log('Course Credential already issued.');
+        return;
+    }
+
+    const requiredModuleIds = course.credentialModuleIds;
+
+    // Fetch earned micro-credentials (can be PENDING or ISSUED)
+    const earnedMicroCredentials = await prisma.microCredential.findMany({
+        where: {
+            student_id: studentId,
+            module_id: { in: requiredModuleIds },
+            type: 'MICRO_CREDENTIAL',
+            status: { in: ['ISSUED', 'PENDING'] }
+        },
+    });
+
+    const earnedModuleIds = new Set(earnedMicroCredentials.map(mc => mc.module_id));
+    const allCourseRequirementsMet = requiredModuleIds.every(reqId => earnedModuleIds.has(reqId));
+
+    console.log(`Course requirements met: ${allCourseRequirementsMet}`);
+
+    if (allCourseRequirementsMet) {
+        // Aggregate demonstrated competencies from required micro-credentials
+        const allCourseDemonstratedCompetencies = earnedMicroCredentials.flatMap(mc =>
+            mc.payloadJson.credentialSubject.demonstratedCompetencies || []
+        );
+        const uniqueCourseCompetencies = Array.from(new Map(allCourseDemonstratedCompetencies.map(c => [c.id, c])).values());
+
+        // Update local record
+        const localCourseCredential = await updateLocalCourseCredential(studentId, courseId, 'Completed', uniqueCourseCompetencies);
+        console.log(`Local CourseCredential updated/created: ${localCourseCredential.id}, Status: ${localCourseCredential.status}`);
+
+        // Trigger on-chain issuance
+        if (isFinalEvent) {
+            console.log('Attempting on-chain CourseCredential issuance...');
+            await performOnChainCourseCredentialIssuance(
+                studentId,
+                courseId,
+                'Completed',
+                uniqueCourseCompetencies,
+                requiredModuleIds
+            );
+        }
     }
 };
 
@@ -157,7 +210,6 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
 
     if (!module) {
         console.error(`Module with ID ${moduleId} not found.`);
-        console.log('--- checkAndIssueCredentials Debug End (Module Not Found) ---');
         return;
     }
 
@@ -173,40 +225,17 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
     let hasMetCompetencyRequirements = true;
     if (module.competencies && module.competencies.length > 0) {
         for (const competency of module.competencies) {
-            // Get the count of successful evidence
             const successfulEvidenceCount = await prisma.studentCompetencyEvidence.count({
-                where: {
-                    studentId: studentId,
-                    moduleId: moduleId,
-                    competencyId: competency.id,
-                    status: 'SUCCESS',
-                },
+                where: { studentId, moduleId, competencyId: competency.id, status: 'SUCCESS' },
             });
-
-            // Get the total count of evidence submissions for this competency
             const totalEvidenceCount = await prisma.studentCompetencyEvidence.count({
-                where: {
-                    studentId: studentId,
-                    moduleId: moduleId,
-                    competencyId: competency.id,
-                },
+                where: { studentId, moduleId, competencyId: competency.id },
             });
 
-            // If there's no evidence, they haven't met the requirement
-            if (totalEvidenceCount === 0) {
+            if (totalEvidenceCount === 0 || (successfulEvidenceCount / totalEvidenceCount) < 0.5) {
                 hasMetCompetencyRequirements = false;
-                console.log(`Competency ${competency.name}: No evidence found.`);
                 break;
             }
-
-            // Check if the success rate is at least 50%
-            const successRate = successfulEvidenceCount / totalEvidenceCount;
-            if (successRate < 0.5) {
-                hasMetCompetencyRequirements = false;
-                console.log(`Competency ${competency.name}: Success rate ${successRate} < 0.5`);
-                break;
-            }
-            console.log(`Competency ${competency.name}: Successful evidence count ${successfulEvidenceCount}, total evidence count ${totalEvidenceCount}, success rate ${successRate}`);
         }
     }
     console.log(`hasMetCompetencyRequirements: ${hasMetCompetencyRequirements}`);
@@ -214,18 +243,10 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
     const overallPassing = isPassing(descriptor, minDescriptor) && hasMetCompetencyRequirements;
     const credentialType = overallPassing ? 'MICRO_CREDENTIAL' : 'STATEMENT_OF_ATTAINMENT';
 
-    console.log(`overallPassing: ${overallPassing}, credentialType: ${credentialType}`);
-
-    // Fetch demonstrated competencies for payload (common for both types)
+    // Fetch demonstrated competencies for payload
     const demonstratedEvidence = await prisma.studentCompetencyEvidence.findMany({
-        where: {
-            studentId: studentId,
-            moduleId: moduleId,
-            status: 'SUCCESS',
-        },
-        include: {
-            competency: true,
-        },
+        where: { studentId, moduleId, status: 'SUCCESS' },
+        include: { competency: true },
     });
     const demonstratedCompetencies = demonstratedEvidence.map(evidence => ({
         id: evidence.competency.id,
@@ -233,85 +254,29 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
         description: evidence.competency.description,
     }));
 
-    // Always update the local provisional micro-credential
-    const localMicroCredential = await updateLocalMicroCredential(
-        studentId,
-        moduleId,
-        credentialType,
-        finalScore,
-        descriptor,
-        demonstratedCompetencies
-    );
-    console.log(`Local MicroCredential updated/created: ${localMicroCredential.id}, Status: ${localMicroCredential.status}`);
+    // Update local micro-credential
+    await updateLocalMicroCredential(studentId, moduleId, credentialType, finalScore, descriptor, demonstratedCompetencies);
 
-    // If this is the final event and overall passing, trigger on-chain issuance for micro-credential
+    // Final event on-chain issuance
     if (isFinalEvent && overallPassing) {
-        console.log('Attempting on-chain MicroCredential issuance...');
-        await performOnChainMicroCredentialIssuance(
-            studentId,
-            moduleId,
-            credentialType, // Pass credentialType
-            finalScore, // Pass finalScore
-            descriptor, // Pass descriptor
-            demonstratedCompetencies // Pass demonstratedCompetencies
-        );
-    } else if (isFinalEvent && !overallPassing) {
-        console.log('Final event but not overall passing. Not issuing on-chain MicroCredential.');
-        // If it's a statement of attainment and final event, we might still want to issue it on-chain
-        // For now, we only issue MICRO_CREDENTIAL on-chain based on previous discussions.
-        // This could be a configurable option.
-    } else {
-        console.log(`Not a final event (isFinalEvent: ${isFinalEvent}) or not overall passing (overallPassing: ${overallPassing}). Not attempting on-chain MicroCredential issuance.`);
+        await performOnChainMicroCredentialIssuance(studentId, moduleId, credentialType, finalScore, descriptor, demonstratedCompetencies);
     }
 
-    // After potentially updating the micro-credential, check for CourseCredential
-    const courseMicroCredentials = await prisma.microCredential.findMany({
-        where: {
-            student_id: studentId,
-            module: { course_id: module.course.course_id },
-            type: 'MICRO_CREDENTIAL', // Only count full micro-credentials for course credential
-            status: 'ISSUED', // Only count already issued on-chain credentials
-        },
-    });
-
-    const requiredModuleIds = module.course.credentialModuleIds;
-    if (requiredModuleIds && requiredModuleIds.length > 0) {
-        const earnedRequiredMicroCredentialIds = new Set(courseMicroCredentials.map(mc => mc.module_id));
-        const allCourseRequirementsMet = requiredModuleIds.every(reqId => earnedRequiredMicroCredentialIds.has(reqId));
-
-        console.log(`Course requirements met: ${allCourseRequirementsMet}`);
-
-        // Aggregate all demonstrated competencies from the required micro-credentials
-        const allCourseDemonstratedCompetencies = courseMicroCredentials.flatMap(mc =>
-            mc.payloadJson.credentialSubject.demonstratedCompetencies || []
-        );
-        const uniqueCourseCompetencies = Array.from(new Map(allCourseDemonstratedCompetencies.map(c => [c.id, c])).values());
-
-        if (allCourseRequirementsMet) {
-            // Always update local provisional course credential
-            const localCourseCredential = await updateLocalCourseCredential(studentId, module.course.course_id, 'Completed', uniqueCourseCompetencies);
-            console.log(`Local CourseCredential updated/created: ${localCourseCredential.id}, Status: ${localCourseCredential.status}`);
-
-            // If this is the final event for the module, and all course requirements are met, trigger on-chain issuance for course credential
-            if (isFinalEvent) {
-                console.log('Attempting on-chain CourseCredential issuance...');
-                await performOnChainCourseCredentialIssuance(
-                    studentId,
-                    module.course.course_id,
-                    localCourseCredential.descriptor, // Pass course descriptor
-                    uniqueCourseCompetencies, // Pass unique aggregated competencies
-                    requiredModuleIds // Pass required module IDs
-                );
-            } else {
-                console.log(`Not a final event (isFinalEvent: ${isFinalEvent}). Not attempting on-chain CourseCredential issuance.`);
-            }
-        } else {
-            console.log('Course requirements not met. Not attempting on-chain CourseCredential issuance.');
-        }
-    } else {
-        console.log('No required module IDs for this course. Not checking/issuing CourseCredential.');
-    }
+    // Check for CourseCredential
+    await checkAndIssueCourseCredential(studentId, module.course_id, isFinalEvent);
+    
     console.log('--- checkAndIssueCredentials Debug End ---');
+};
+
+module.exports = {
+    checkAndIssueCredentials,
+    checkAndIssueCourseCredential,
+    updateLocalMicroCredential,
+    performOnChainMicroCredentialIssuance,
+    updateLocalCourseCredential,
+    performOnChainCourseCredentialIssuance,
+    getDescriptor,
+    isPassing,
 };
 
 module.exports = {

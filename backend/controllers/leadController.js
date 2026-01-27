@@ -499,6 +499,32 @@ const updateCourseCredentialRule = async (req, res) => {
         credentialModuleIds: module_ids,
       },
     });
+
+    // --- RE-EVALUATE STUDENTS ---
+    // Fetch all students enrolled in any module of this course
+    const enrollments = await prisma.enrollment.findMany({
+        where: {
+            module: {
+                course_id: course_id
+            }
+        },
+        select: {
+            student_id: true
+        },
+        distinct: ['student_id']
+    });
+
+    const { checkAndIssueCourseCredential } = require('../lib/credentialHelpers');
+
+    // Re-evaluate each student. We set isFinalEvent to true so they get on-chain issuance if they qualify.
+    for (const enrollment of enrollments) {
+        try {
+            await checkAndIssueCourseCredential(enrollment.student_id, course_id, true);
+        } catch (error) {
+            console.error(`Error re-evaluating course credential for student ${enrollment.student_id}:`, error);
+        }
+    }
+
     res.json(course);
   } catch (error) {
     console.error(error);
