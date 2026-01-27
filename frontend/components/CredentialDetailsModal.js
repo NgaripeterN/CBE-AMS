@@ -52,7 +52,9 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
             <p><strong>Narrative:</strong> {payload.badge?.criteria?.narrative || 'No narrative available.'}</p>
             { (payload.badge?.result || payload.result) && (
               <div className="mt-2 p-3 bg-muted rounded-md">
-                <p><strong>Score:</strong> <span className="font-mono">{(payload.badge?.result?.score || payload.result?.score)?.toFixed(2)}%</span></p>
+                {(payload.badge?.result?.score !== undefined && payload.badge?.result?.score !== null) || (payload.result?.score !== undefined && payload.result?.score !== null) ? (
+                  <p><strong>Score:</strong> <span className="font-mono">{(payload.badge?.result?.score || payload.result?.score)?.toFixed(2)}%</span></p>
+                ) : null}
                 <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor)}</span></p>
               </div>
             )}
@@ -60,11 +62,15 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
 
           {transcript && transcript.length > 0 && (
             <div className="border-t border-border pt-4">
-              <h3 className="font-semibold text-lg mb-2">Transcript</h3>
-              <div className="grid grid-cols-2 gap-2">
+              <h3 className="font-semibold text-lg mb-2">Transcript (Yearly Performance)</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {transcript.map((item, index) => (
-                  <div key={index} className="p-2 bg-muted rounded-md">
-                    <p><strong>Year {item.year}:</strong> <span className="font-mono">{item.score}%</span></p>
+                  <div key={index} className="p-3 bg-muted rounded-md flex justify-between items-center">
+                    <div>
+                      <p className="font-bold">Year {item.year}</p>
+                      {item.weight && <p className="text-xs text-muted-foreground">Weight: {item.weight}</p>}
+                    </div>
+                    <span className="font-mono text-lg">{item.score}%</span>
                   </div>
                 ))}
               </div>

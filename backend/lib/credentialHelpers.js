@@ -1,10 +1,10 @@
 const prisma = require('./prisma');
-const { calculateFinalScore } = require('./scoring'); // Assuming calculateFinalScore is in scoring.js
-const { issueCredential: issueIssuerCredential, issueCourseCredential } = require('./issuer'); // Renamed to avoid conflict
+const { calculateFinalScore } = require('./scoring'); 
+const { issueCredential: issueIssuerCredential, issueCourseCredential } = require('./issuer'); 
 const { createNotification } = require('./notifications');
-const { buildCredentialPayload } = require('./credentialBuilder'); // Import buildCredentialPayload
+const { buildCredentialPayload } = require('./credentialBuilder'); 
 
-// Helper for descriptor logic (needed in credentialHelpers)
+// Helper for descriptor logic
 const getDescriptor = (score) => {
     if (score >= 80) return 'EE';
     if (score >= 50) return 'ME';
@@ -42,7 +42,7 @@ const updateLocalMicroCredential = async (studentId, moduleId, type, finalScore,
             score: finalScore,
             type,
             payloadJson: payload,
-            status: 'PENDING', // Always PENDING initially, until on-chain issuance
+            status: 'PENDING',
         },
         create: {
             student_id: studentId,
@@ -52,32 +52,31 @@ const updateLocalMicroCredential = async (studentId, moduleId, type, finalScore,
             type,
             payloadJson: payload,
             status: 'PENDING',
-            issuedAt: null, // Not issued on-chain yet
+            issuedAt: null,
             txHash: null,
         },
     });
     return microCredential;
 };
 
-const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniqueCourseCompetencies) => {
+const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniqueCourseCompetencies, evidenceModules, score, transcript) => {
     const course = await prisma.course.findUnique({
         where: { course_id: courseId },
     });
     const student = await prisma.student.findUnique({ where: { id: studentId }, include: { user: true } });
 
-    // Ensure we don't have undefined in the array for Prisma
-    const safeEvidenceModuleIds = (course.credentialModuleIds || []).filter(id => id !== undefined && id !== null);
+    const evidenceModuleIds = (evidenceModules || []).map(m => typeof m === 'string' ? m : m.id);
 
     const payload = buildCredentialPayload({
         student,
         course,
         type: 'COURSE_CREDENTIAL',
-        score: null, 
+        score: score, 
         descriptor,
         demonstratedCompetencies: uniqueCourseCompetencies,
-        evidenceModuleIds: safeEvidenceModuleIds,
-        evidenceModules: safeEvidenceModuleIds, // Providing this as fallback for the payload
-        transcript: [], // Providing empty array instead of undefined
+        evidenceModuleIds: evidenceModuleIds,
+        evidenceModules: evidenceModules,
+        transcript: transcript, 
     });
     
     const courseCredential = await prisma.courseCredential.upsert({
@@ -96,7 +95,7 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
             student_id: studentId,
             course_id: courseId,
             descriptor,
-            evidenceModuleIds: safeEvidenceModuleIds,
+            evidenceModuleIds: evidenceModuleIds,
             payloadJson: payload,
             status: 'PENDING',
             issuedAt: null,
@@ -108,32 +107,19 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
 
 const performOnChainMicroCredentialIssuance = async (studentId, moduleId, type, score, descriptor, demonstratedCompetencies) => {
     try {
-        await issueIssuerCredential(
-            studentId,
-            moduleId,
-            type,
-            score,
-            descriptor,
-            demonstratedCompetencies
-        );
+        await issueIssuerCredential(studentId, moduleId, type, score, descriptor, demonstratedCompetencies);
         console.log(`MicroCredential for student ${studentId}, module ${moduleId} added to issuance queue.`);
     } catch (error) {
-        console.error(`Error adding MicroCredential to issuance queue for student ${studentId}, module ${moduleId}:`, error);
+        console.error(`Error adding MicroCredential to issuance queue:`, error);
     }
 };
 
-const performOnChainCourseCredentialIssuance = async (studentId, courseId, descriptor, demonstratedCompetencies, evidenceModuleIds) => {
+const performOnChainCourseCredentialIssuance = async (studentId, courseId, score, descriptor, demonstratedCompetencies, evidenceModules, transcript) => {
     try {
-        await issueCourseCredential(
-            studentId,
-            courseId,
-            descriptor,
-            demonstratedCompetencies,
-            evidenceModuleIds
-        );
+        await issueCourseCredential(studentId, courseId, descriptor, demonstratedCompetencies, evidenceModules, transcript);
         console.log(`CourseCredential for student ${studentId}, course ${courseId} added to issuance queue.`);
     } catch (error) {
-        console.error(`Error adding CourseCredential to issuance queue for student ${studentId}, course ${courseId}:`, error);
+        console.error(`Error adding CourseCredential to issuance queue:`, error);
     }
 };
 
@@ -145,11 +131,10 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
     });
 
     if (!course || !course.credentialModuleIds || course.credentialModuleIds.length === 0) {
-        console.log('No required module IDs for this course or course not found.');
+        console.log('No required module IDs for this course.');
         return;
     }
 
-    // Check if Course Credential already ISSUED
     const existingCC = await prisma.courseCredential.findUnique({
         where: { student_id_course_id: { student_id: studentId, course_id: courseId } }
     });
@@ -160,7 +145,6 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
 
     const requiredModuleIds = course.credentialModuleIds;
 
-    // Fetch earned micro-credentials (can be PENDING or ISSUED)
     const earnedMicroCredentials = await prisma.microCredential.findMany({
         where: {
             student_id: studentId,
@@ -168,33 +152,85 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
             type: 'MICRO_CREDENTIAL',
             status: { in: ['ISSUED', 'PENDING'] }
         },
+        include: {
+            module: {
+                select: {
+                    module_id: true,
+                    title: true,
+                    yearOfStudy: true
+                }
+            }
+        }
     });
 
     const earnedModuleIds = new Set(earnedMicroCredentials.map(mc => mc.module_id));
     const allCourseRequirementsMet = requiredModuleIds.every(reqId => earnedModuleIds.has(reqId));
 
-    console.log(`Course requirements met: ${allCourseRequirementsMet}`);
-
     if (allCourseRequirementsMet) {
-        // Aggregate demonstrated competencies from required micro-credentials
+        const yearGroups = {};
+        earnedMicroCredentials.forEach(mc => {
+            const year = mc.module.yearOfStudy || 1;
+            if (!yearGroups[year]) yearGroups[year] = [];
+            yearGroups[year].push(mc.score || 0);
+        });
+
+        const years = Object.keys(yearGroups).sort();
+        const courseWeights = course.weighting || {};
+        const totalWeightDefined = Object.values(courseWeights).reduce((a, b) => a + b, 0);
+        
+        let finalWeightedScore = 0;
+        const transcript = [];
+
+        years.forEach(year => {
+            const scores = yearGroups[year];
+            const avgYearScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+            
+            let weight = courseWeights[year];
+            if (weight === undefined) {
+                const remainingWeight = 1 - totalWeightDefined;
+                const undefinedYearsCount = years.filter(y => courseWeights[y] === undefined).length;
+                weight = remainingWeight > 0 ? remainingWeight / undefinedYearsCount : 1 / years.length;
+            }
+
+            finalWeightedScore += (avgYearScore * weight);
+            
+            transcript.push({
+                year: parseInt(year),
+                score: parseFloat(avgYearScore.toFixed(2)),
+                weight: parseFloat((weight * 100).toFixed(2)) + '%'
+            });
+        });
+
+        const courseDescriptor = getDescriptor(finalWeightedScore);
+        const evidenceModules = earnedMicroCredentials.map(mc => ({
+            id: mc.module.module_id,
+            title: mc.module.title
+        }));
+
         const allCourseDemonstratedCompetencies = earnedMicroCredentials.flatMap(mc =>
-            mc.payloadJson.credentialSubject.demonstratedCompetencies || []
+            mc.payloadJson?.credentialSubject?.demonstratedCompetencies || []
         );
         const uniqueCourseCompetencies = Array.from(new Map(allCourseDemonstratedCompetencies.map(c => [c.id, c])).values());
 
-        // Update local record
-        const localCourseCredential = await updateLocalCourseCredential(studentId, courseId, 'Completed', uniqueCourseCompetencies);
-        console.log(`Local CourseCredential updated/created: ${localCourseCredential.id}, Status: ${localCourseCredential.status}`);
+        const localCourseCredential = await updateLocalCourseCredential(
+            studentId, 
+            courseId, 
+            courseDescriptor, 
+            uniqueCourseCompetencies, 
+            evidenceModules, 
+            finalWeightedScore,
+            transcript
+        );
 
-        // Trigger on-chain issuance
         if (isFinalEvent) {
-            console.log('Attempting on-chain CourseCredential issuance...');
             await performOnChainCourseCredentialIssuance(
                 studentId,
                 courseId,
-                'Completed',
+                finalWeightedScore,
+                courseDescriptor,
                 uniqueCourseCompetencies,
-                requiredModuleIds
+                evidenceModules,
+                transcript
             );
         }
     }
@@ -202,9 +238,6 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
 
 
 const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = false) => {
-    console.log('--- checkAndIssueCredentials Debug Start ---');
-    console.log(`studentId: ${studentId}, moduleId: ${moduleId}, isFinalEvent: ${isFinalEvent}`);
-
     const module = await prisma.module.findUnique({
         where: { module_id: moduleId },
         include: {
@@ -213,20 +246,11 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
         }
     });
 
-    if (!module) {
-        console.error(`Module with ID ${moduleId} not found.`);
-        return;
-    }
-
-    const course = module.course;
-    const minDescriptor = course.minDescriptor || 'ME';
+    if (!module) return;
 
     const finalScore = await calculateFinalScore(studentId, moduleId);
     const descriptor = getDescriptor(finalScore);
 
-    console.log(`finalScore: ${finalScore}, descriptor: ${descriptor}, minDescriptor: ${minDescriptor}`);
-
-    // Competency Check
     let hasMetCompetencyRequirements = true;
     if (module.competencies && module.competencies.length > 0) {
         for (const competency of module.competencies) {
@@ -243,12 +267,10 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
             }
         }
     }
-    console.log(`hasMetCompetencyRequirements: ${hasMetCompetencyRequirements}`);
 
-    const overallPassing = isPassing(descriptor, minDescriptor) && hasMetCompetencyRequirements;
+    const overallPassing = isPassing(descriptor, module.course.minDescriptor || 'ME') && hasMetCompetencyRequirements;
     const credentialType = overallPassing ? 'MICRO_CREDENTIAL' : 'STATEMENT_OF_ATTAINMENT';
 
-    // Fetch demonstrated competencies for payload
     const demonstratedEvidence = await prisma.studentCompetencyEvidence.findMany({
         where: { studentId, moduleId, status: 'SUCCESS' },
         include: { competency: true },
@@ -259,18 +281,13 @@ const checkAndIssueCredentials = async (studentId, moduleId, isFinalEvent = fals
         description: evidence.competency.description,
     }));
 
-    // Update local micro-credential
     await updateLocalMicroCredential(studentId, moduleId, credentialType, finalScore, descriptor, demonstratedCompetencies);
 
-    // Final event on-chain issuance
     if (isFinalEvent && overallPassing) {
         await performOnChainMicroCredentialIssuance(studentId, moduleId, credentialType, finalScore, descriptor, demonstratedCompetencies);
     }
 
-    // Check for CourseCredential
     await checkAndIssueCourseCredential(studentId, module.course_id, isFinalEvent);
-    
-    console.log('--- checkAndIssueCredentials Debug End ---');
 };
 
 module.exports = {
