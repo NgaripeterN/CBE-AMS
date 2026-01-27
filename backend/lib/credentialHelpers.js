@@ -59,7 +59,7 @@ const updateLocalMicroCredential = async (studentId, moduleId, type, finalScore,
     return microCredential;
 };
 
-const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniqueCourseCompetencies, evidenceModules, score, transcript) => {
+const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniqueCourseCompetencies, evidenceModules, score, transcript, evidenceMicroCredentialIds) => {
     const course = await prisma.course.findUnique({
         where: { course_id: courseId },
     });
@@ -89,6 +89,7 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
         update: {
             descriptor,
             payloadJson: payload,
+            evidenceMicroCredentialIds: evidenceMicroCredentialIds,
             status: 'PENDING', 
         },
         create: {
@@ -96,6 +97,7 @@ const updateLocalCourseCredential = async (studentId, courseId, descriptor, uniq
             course_id: courseId,
             descriptor,
             evidenceModuleIds: evidenceModuleIds,
+            evidenceMicroCredentialIds: evidenceMicroCredentialIds,
             payloadJson: payload,
             status: 'PENDING',
             issuedAt: null,
@@ -168,7 +170,9 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
 
     if (allCourseRequirementsMet) {
         const yearGroups = {};
+        const evidenceMicroCredentialIds = []; // Collect IDs
         earnedMicroCredentials.forEach(mc => {
+            evidenceMicroCredentialIds.push(mc.id); // Add to the list
             const year = mc.module.yearOfStudy || 1;
             if (!yearGroups[year]) yearGroups[year] = [];
             yearGroups[year].push(mc.score || 0);
@@ -219,7 +223,8 @@ const checkAndIssueCourseCredential = async (studentId, courseId, isFinalEvent =
             uniqueCourseCompetencies, 
             evidenceModules, 
             finalWeightedScore,
-            transcript
+            transcript,
+            evidenceMicroCredentialIds // Pass the collected IDs
         );
 
         if (isFinalEvent) {
