@@ -541,7 +541,7 @@ const completeOnboarding = async (req, res) => {
 
 const getMyModules = async (req, res) => {
   const { userId } = req.user;
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, tab = 'active' } = req.query;
   const offset = (page - 1) * limit;
 
   const studentId = await getStudentId(userId);
@@ -550,26 +550,37 @@ const getMyModules = async (req, res) => {
   }
 
   try {
-    const enrollments = await prisma.enrollment.findMany({
-      where: { student_id: studentId },
+    // 1. Fetch ALL active enrollments
+    const allEnrollments = await prisma.enrollment.findMany({
+      where: { student_id: studentId, status: 'ACTIVE' },
       include: { module: true },
-      skip: parseInt(offset),
-      take: parseInt(limit),
+      orderBy: { enrolledAt: 'desc' }
     });
 
-    const totalEnrollments = await prisma.enrollment.count({
-      where: { student_id: studentId },
-    });
-
-    // Fetch micro-credentials to determine completion status
+    // 2. Fetch completed modules (MicroCredentials)
     const microCredentials = await prisma.microCredential.findMany({
-      where: { student_id: studentId },
+      where: { student_id: studentId, status: 'ISSUED' },
       select: { module_id: true },
     });
 
     const completedModuleIds = new Set(microCredentials.map(mc => mc.module_id));
 
-    const modules = enrollments.map((e) => ({
+    // 3. Filter in memory based on tab
+    const filteredEnrollments = allEnrollments.filter(e => {
+        const isCompleted = completedModuleIds.has(e.module.module_id);
+        if (tab === 'completed') {
+            return isCompleted;
+        } else {
+            return !isCompleted;
+        }
+    });
+
+    const totalFiltered = filteredEnrollments.length;
+
+    // 4. Paginate the filtered list
+    const paginatedEnrollments = filteredEnrollments.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+
+    const modules = paginatedEnrollments.map((e) => ({
       ...e.module,
       completed: completedModuleIds.has(e.module.module_id),
     }));
@@ -577,8 +588,9 @@ const getMyModules = async (req, res) => {
     res.json({
       modules,
       currentPage: parseInt(page),
-      totalPages: Math.ceil(totalEnrollments / limit),
-      totalModules: totalEnrollments,
+      totalPages: Math.ceil(totalFiltered / limit),
+      totalModules: totalFiltered,
+      hasMore: (parseInt(offset) + modules.length) < totalFiltered
     });
   } catch (error) {
     console.error('Error fetching modules:', error);

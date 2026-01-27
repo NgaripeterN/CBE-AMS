@@ -14,11 +14,29 @@ const MyModulesPage = () => {
   const [limit, setLimit] = useState(10);
   const [hasMore, setHasMore] = useState(true);
 
+  // Handle tab change: reset state and page
+  const handleTabChange = (tab) => {
+    if (tab !== activeTab) {
+      setModules([]);
+      setPage(1);
+      setActiveTab(tab);
+      setHasMore(true);
+    }
+  };
+
   useEffect(() => {
-    const fetchModules = async (page, limit) => {
+    const fetchModules = async () => {
+      setLoading(true);
       try {
-        const { data } = await api.get(`/student/my-modules?page=${page}&limit=${limit}`);
-        setModules(prevModules => [...prevModules, ...data.modules]);
+        // Pass the activeTab to the backend
+        const { data } = await api.get(`/student/my-modules?page=${page}&limit=${limit}&tab=${activeTab}`);
+        
+        if (page === 1) {
+          setModules(data.modules);
+        } else {
+          setModules(prevModules => [...prevModules, ...data.modules]);
+        }
+        
         setHasMore(data.hasMore);
       } catch (err) {
         setError('Failed to load modules.');
@@ -26,14 +44,11 @@ const MyModulesPage = () => {
         setLoading(false);
       }
     };
-    fetchModules(page, limit);
-  }, [page, limit]);
+    fetchModules();
+  }, [page, limit, activeTab]);
 
-  const activeModules = modules.filter(m => !m.completed);
-  const completedModules = modules.filter(m => m.completed);
-
-  // Group completed modules by Year, then Semester
-  const groupedByYear = completedModules.reduce((acc, module) => {
+  // Group completed modules by Year, then Semester (only relevant for completed tab)
+  const groupedByYear = activeTab === 'completed' ? modules.reduce((acc, module) => {
     const year = module.yearOfStudy || 'Unknown Year';
     const semester = module.semesterOfStudy || 'Unknown Semester';
 
@@ -45,7 +60,7 @@ const MyModulesPage = () => {
     }
     acc[year][semester].push(module);
     return acc;
-  }, {});
+  }, {}) : {};
 
   // Sort Years
   const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
@@ -54,9 +69,7 @@ const MyModulesPage = () => {
     return a - b;
   });
 
-  const modulesToShow = activeTab === 'active' ? activeModules : completedModules;
-
-  if (loading && page === 1) {
+  if (loading && page === 1 && modules.length === 0) {
     return (
       <div className="flex justify-center items-center h-screen bg-background text-foreground">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
@@ -72,11 +85,6 @@ const MyModulesPage = () => {
       </div>
     );
   }
-
-  const tabVariants = {
-    active: { width: '100%' },
-    inactive: { width: 0 },
-  };
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -97,8 +105,8 @@ const MyModulesPage = () => {
 
       <div className="mb-10">
         <div className="flex space-x-6 border-b border-gray-200 dark:border-gray-700">
-          <TabButton title="Active" activeTab={activeTab} setActiveTab={setActiveTab} />
-          <TabButton title="Completed" activeTab={activeTab} setActiveTab={setActiveTab} />
+          <TabButton title="Active" activeTab={activeTab} setActiveTab={handleTabChange} />
+          <TabButton title="Completed" activeTab={activeTab} setActiveTab={handleTabChange} />
         </div>
       </div>
 
@@ -112,8 +120,8 @@ const MyModulesPage = () => {
         >
           {activeTab === 'active' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {activeModules.length > 0 ? (
-                activeModules.map((module, i) => (
+              {modules.length > 0 ? (
+                modules.map((module, i) => (
                   <motion.div
                     key={module.module_id}
                     custom={i}
@@ -146,9 +154,11 @@ const MyModulesPage = () => {
                   </motion.div>
                 ))
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">
-                  <p className="text-muted-foreground text-xl">No active modules found.</p>
-                </motion.div>
+                !loading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">
+                    <p className="text-muted-foreground text-xl">No active modules found.</p>
+                  </motion.div>
+                )
               )}
             </div>
           )}
@@ -224,9 +234,11 @@ const MyModulesPage = () => {
                   </div>
                 ))
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">
-                  <p className="text-muted-foreground text-xl">No completed modules found.</p>
-                </motion.div>
+                !loading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full text-center py-20 border-2 border-dashed border-muted-foreground/20 rounded-2xl">
+                    <p className="text-muted-foreground text-xl">No completed modules found.</p>
+                  </motion.div>
+                )
               )}
             </div>
           )}
