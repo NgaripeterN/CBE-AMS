@@ -24,6 +24,29 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
   const transcript = payload.credentialSubject?.transcript;
   const evidenceModules = payload.credentialSubject?.evidenceModules;
 
+  // Robustly find the score and descriptor
+  let score = payload.badge?.result?.score ?? payload.result?.score ?? payload.credentialSubject?.score;
+  const descriptor = payload.badge?.result?.descriptor ?? payload.result?.descriptor ?? payload.credentialSubject?.descriptor;
+
+  // Fallback: Calculate weighted average if score is null/undefined but transcript exists
+  if ((score === null || score === undefined) && transcript && transcript.length > 0) {
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+
+    transcript.forEach(item => {
+      const s = parseFloat(item.score);
+      const w = parseFloat(item.weight) / 100; // Assuming weight is like "25%"
+      if (!isNaN(s) && !isNaN(w)) {
+        totalWeightedScore += (s * w);
+        totalWeight += w;
+      }
+    });
+
+    if (totalWeight > 0) {
+      score = totalWeightedScore / totalWeight;
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
       <div className="bg-card text-foreground rounded-lg p-6 max-w-4xl w-full shadow-2xl overflow-y-auto max-h-[90vh]">
@@ -50,15 +73,17 @@ const CredentialDetailsModal = ({ credential, onClose }) => {
             <h3 className="font-semibold text-lg mb-2">Credential Details</h3>
             <p><strong>Description:</strong> {description}</p>
             <p><strong>Narrative:</strong> {payload.badge?.criteria?.narrative || 'No narrative available.'}</p>
-            { (payload.badge?.result || payload.result || payload.credentialSubject?.score !== undefined) && (
+            { (descriptor !== undefined || score !== undefined) && (
               <div className="mt-2 p-3 bg-muted rounded-md space-y-2">
-                {(payload.badge?.result?.score !== undefined && payload.badge?.result?.score !== null) || (payload.result?.score !== undefined && payload.result?.score !== null) ? (
-                  <p><strong>Score:</strong> <span className="font-mono">{(payload.badge?.result?.score || payload.result?.score)?.toFixed(2)}%</span></p>
+                {score !== undefined && score !== null ? (
+                  <p><strong>Score:</strong> <span className="font-mono">{Number(score).toFixed(2)}%</span></p>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-4">
-                  <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{(payload.badge?.result?.descriptor || payload.result?.descriptor || payload.credentialSubject?.descriptor)}</span></p>
-                  {(payload.badge?.result?.score !== undefined || payload.result?.score !== undefined || payload.credentialSubject?.score !== undefined) && (
-                    <p><strong>Weighted Average:</strong> <span className="font-mono text-primary font-bold">{(payload.badge?.result?.score || payload.result?.score || payload.credentialSubject?.score)?.toFixed(2)}%</span></p>
+                  {descriptor && (
+                    <p><strong>Descriptor:</strong> <span className="font-mono bg-primary/20 text-primary px-2 py-1 rounded-full">{descriptor}</span></p>
+                  )}
+                  {score !== undefined && score !== null && (
+                    <p><strong>Weighted Average:</strong> <span className="font-mono text-primary font-bold">{Number(score).toFixed(2)}%</span></p>
                   )}
                 </div>
               </div>
