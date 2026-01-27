@@ -47,8 +47,8 @@ const MyModulesPage = () => {
     fetchModules();
   }, [page, limit, activeTab]);
 
-  // Group completed modules by Year, then Semester (only relevant for completed tab)
-  const groupedByYear = activeTab === 'completed' ? modules.reduce((acc, module) => {
+  // Group modules by Year, then Semester (applies to both active and completed)
+  const groupedByYear = modules.reduce((acc, module) => {
     const year = module.yearOfStudy || 'Unknown Year';
     const semester = module.semesterOfStudy || 'Unknown Semester';
 
@@ -60,7 +60,7 @@ const MyModulesPage = () => {
     }
     acc[year][semester].push(module);
     return acc;
-  }, {}) : {};
+  }, {});
 
   // Sort Years
   const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
@@ -119,44 +119,62 @@ const MyModulesPage = () => {
           transition={{ duration: 0.3 }}
         >
           {activeTab === 'active' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {modules.length > 0 ? (
-                modules.map((module, i) => (
-                  <motion.div
-                    key={module.module_id}
-                    custom={i}
-                    variants={cardVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="h-full"
-                  >
-                    <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
-                      <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
-                        <div className="p-8 flex-grow">
-                          <div className="flex justify-between items-start mb-4">
-                            <span className="px-3 py-1 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs font-bold rounded-full uppercase tracking-wider">
-                              In Progress
-                            </span>
-                            <ClockIcon className="h-6 w-6 text-yellow-500" />
-                          </div>
-                          <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
-                            {module.title}
-                          </h2>
-                          <p className="text-muted-foreground font-mono text-sm tracking-tight mb-2">{module.moduleCode}</p>
-                          {(module.yearOfStudy && module.semesterOfStudy) && (
-                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                              Year {module.yearOfStudy}, Sem {module.semesterOfStudy}
-                            </div>
-                          )}
+            <div className="space-y-12">
+              {sortedYears.length > 0 ? (
+                sortedYears.map((year) => (
+                  <div key={year} className="space-y-8">
+                    <h3 className="text-2xl font-bold text-foreground pl-3 border-l-4 border-primary">
+                      {year === 'Unknown Year' ? 'Other' : `Year ${year}`}
+                    </h3>
+
+                    {Object.keys(groupedByYear[year])
+                      .sort((a, b) => {
+                         if (a === 'Unknown Semester') return 1;
+                         if (b === 'Unknown Semester') return -1;
+                         return a - b;
+                      })
+                      .map((semester) => (
+                      <div key={`${year}-${semester}`}>
+                        <h4 className="text-xl font-semibold text-muted-foreground mb-4 ml-1">
+                          {semester === 'Unknown Semester' ? 'Other' : `Semester ${semester}`}
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                          {groupedByYear[year][semester].map((module, i) => (
+                            <motion.div
+                              key={module.module_id}
+                              custom={i}
+                              variants={cardVariants}
+                              initial="hidden"
+                              animate="visible"
+                              className="h-full"
+                            >
+                              <Link href={`/student/my-modules/${module.module_id}`} legacyBehavior>
+                                <a className="bg-card hover:bg-muted/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col border border-border group">
+                                  <div className="p-8 flex-grow">
+                                    <div className="flex justify-between items-start mb-4">
+                                      <span className="px-3 py-1 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs font-bold rounded-full uppercase tracking-wider">
+                                        In Progress
+                                      </span>
+                                      <ClockIcon className="h-6 w-6 text-yellow-500" />
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors mb-2 line-clamp-2">
+                                      {module.title}
+                                    </h2>
+                                    <p className="text-muted-foreground font-mono text-sm tracking-tight">{module.moduleCode}</p>
+                                  </div>
+                                  <div className="px-8 pb-8">
+                                    <div className="w-full text-center px-4 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-sm group-hover:bg-primary/90 transition-colors">
+                                      View Module
+                                    </div>
+                                  </div>
+                                </a>
+                              </Link>
+                            </motion.div>
+                          ))}
                         </div>
-                        <div className="px-8 pb-8">
-                          <div className="w-full text-center px-4 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-sm group-hover:bg-primary/90 transition-colors">
-                            View Module
-                          </div>
-                        </div>
-                      </a>
-                    </Link>
-                  </motion.div>
+                      </div>
+                    ))}
+                  </div>
                 ))
               ) : (
                 !loading && (
