@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const cloudinary = require('cloudinary').v2;
 const scoring = require('../lib/scoring');
+const { getDescriptor } = require('../lib/credentialHelpers');
 
 const getStudentId = async (userId) => {
     const student = await prisma.student.findUnique({
@@ -817,6 +818,7 @@ const generateTranscript = async (req, res) => {
                     select: {
                         name: true,
                         code: true,
+                        weighting: true, // Include weighting for score calculation
                     },
                 },
             },
@@ -880,6 +882,8 @@ const generateTranscript = async (req, res) => {
             // Only include course summary if it either has no requestedYear or has matching transcript data for the requestedYear
             if (!requestedYear || (filteredCourseTranscript && filteredCourseTranscript.length > 0)) {
                 let demonstratedCompetencies = payloadJson.credentialSubject?.demonstratedCompetencies;
+                let overallScore = requestedYear ? undefined : payloadJson.credentialSubject?.score;
+                let overallDescriptor = requestedYear ? undefined : payloadJson.credentialSubject?.descriptor;
 
                 if (requestedYear) {
                     // Filter competencies based on the micro-credentials of the requested year
@@ -891,13 +895,36 @@ const generateTranscript = async (req, res) => {
                         comps.forEach(c => competencyMap.set(c.id, c));
                     });
                     demonstratedCompetencies = Array.from(competencyMap.values());
+                } else if (overallScore === null || overallScore === undefined) {
+                    // If full transcript and overallScore is missing, calculate it dynamically from yearly summaries
+                    const courseWeights = cc.course.weighting || {};
+                    const totalWeightDefined = Object.values(courseWeights).reduce((a, b) => a + b, 0);
+                    let calculatedScore = 0;
+                    const years = Object.keys(transcriptData.yearlySummary);
+                    
+                    if (years.length > 0) {
+                        years.forEach(year => {
+                            const avgYearScore = parseFloat(transcriptData.yearlySummary[year].averageScore);
+                            if (!isNaN(avgYearScore)) {
+                                let weight = courseWeights[year];
+                                if (weight === undefined) {
+                                    const remainingWeight = 1 - totalWeightDefined;
+                                    const undefinedYearsCount = years.filter(y => courseWeights[y] === undefined).length;
+                                    weight = remainingWeight > 0 ? remainingWeight / undefinedYearsCount : 1 / years.length;
+                                }
+                                calculatedScore += (avgYearScore * weight);
+                            }
+                        });
+                        overallScore = calculatedScore.toFixed(2);
+                        overallDescriptor = getDescriptor(calculatedScore);
+                    }
                 }
 
                 transcriptData.courseSummaries.push({
                     courseCode: cc.course.code,
                     courseName: cc.course.name,
-                    overallScore: requestedYear ? undefined : payloadJson.credentialSubject?.score,
-                    overallDescriptor: requestedYear ? undefined : payloadJson.credentialSubject?.descriptor,
+                    overallScore: overallScore,
+                    overallDescriptor: overallDescriptor,
                     transcript: filteredCourseTranscript, // Use filtered transcript
                     evidenceModules: payloadJson.credentialSubject?.evidenceModules, // Modules with names
                     demonstratedCompetencies: demonstratedCompetencies,
