@@ -197,8 +197,10 @@ const generatePdfTranscript = (data) => {
                 doc.fontSize(12).font(fonts.bold).fill(colors.text)
                    .text(`${course.courseName} (${course.courseCode})`, 60, yPos + 10);
                 
-                doc.fontSize(10).font(fonts.bold).fill(colors.primary)
-                   .text(`Overall: ${course.overallScore}% - ${course.overallDescriptor}`, 60, yPos + 28);
+                if (course.overallScore !== null && course.overallScore !== undefined) {
+                    doc.fontSize(10).font(fonts.bold).fill(colors.primary)
+                       .text(`Overall: ${course.overallScore}% - ${course.overallDescriptor}`, 60, yPos + 28);
+                }
 
                 yPos += 70;
 

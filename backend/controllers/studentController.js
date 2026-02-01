@@ -793,6 +793,7 @@ const generateTranscript = async (req, res) => {
                         title: true,
                         moduleCode: true,
                         yearOfStudy: true,
+                        course_id: true,
                     },
                 },
             },
@@ -878,14 +879,28 @@ const generateTranscript = async (req, res) => {
 
             // Only include course summary if it either has no requestedYear or has matching transcript data for the requestedYear
             if (!requestedYear || (filteredCourseTranscript && filteredCourseTranscript.length > 0)) {
+                let demonstratedCompetencies = payloadJson.credentialSubject?.demonstratedCompetencies;
+
+                if (requestedYear) {
+                    // Filter competencies based on the micro-credentials of the requested year
+                    const relevantMCs = microCredentials.filter(mc => mc.module.course_id === cc.course_id);
+                    const competencyMap = new Map();
+                    relevantMCs.forEach(mc => {
+                        const mcPayload = typeof mc.payloadJson === 'string' ? JSON.parse(mc.payloadJson) : mc.payloadJson;
+                        const comps = mcPayload.credentialSubject?.demonstratedCompetencies || [];
+                        comps.forEach(c => competencyMap.set(c.id, c));
+                    });
+                    demonstratedCompetencies = Array.from(competencyMap.values());
+                }
+
                 transcriptData.courseSummaries.push({
                     courseCode: cc.course.code,
                     courseName: cc.course.name,
-                    overallScore: payloadJson.credentialSubject?.score,
-                    overallDescriptor: payloadJson.credentialSubject?.descriptor,
+                    overallScore: requestedYear ? undefined : payloadJson.credentialSubject?.score,
+                    overallDescriptor: requestedYear ? undefined : payloadJson.credentialSubject?.descriptor,
                     transcript: filteredCourseTranscript, // Use filtered transcript
                     evidenceModules: payloadJson.credentialSubject?.evidenceModules, // Modules with names
-                    demonstratedCompetencies: payloadJson.credentialSubject?.demonstratedCompetencies,
+                    demonstratedCompetencies: demonstratedCompetencies,
                     issuedAt: cc.issuedAt,
                 });
             }
