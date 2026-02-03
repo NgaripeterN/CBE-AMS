@@ -114,22 +114,26 @@ const TranscriptPage = () => {
   };
 
   if (loading) {
-    return <p>Loading user data...</p>;
+    return (
+      <div className="flex justify-center items-center h-screen bg-background">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6 text-foreground">Academic Transcript</h1>
+    <div className="container mx-auto px-4 py-8 sm:py-12">
+      <h1 className="text-3xl sm:text-4xl font-extrabold mb-8 text-foreground tracking-tight">Academic Transcript</h1>
       
-      <div className="bg-card p-6 rounded-xl shadow-lg border border-border">
-        <div className="flex flex-col md:flex-row items-center justify-between mb-6">
-          <div className="mb-4 md:mb-0">
-            <h2 className="text-xl font-semibold text-foreground">Download Options</h2>
-            <p className="text-muted-foreground mt-1">Select an academic year and format to download your official transcript.</p>
+      <div className="bg-card p-6 sm:p-8 rounded-2xl shadow-xl border border-border">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-10">
+          <div className="max-w-2xl">
+            <h2 className="text-2xl font-bold text-foreground">Download Options</h2>
+            <p className="text-muted-foreground mt-2 text-lg">Select an academic year and format to download your official transcript.</p>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="w-48">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+            <div className="w-full sm:w-64">
               <Select
                 options={availableTranscriptYears}
                 value={selectedYear}
@@ -142,27 +146,28 @@ const TranscriptPage = () => {
               />
             </div>
             
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="btn btn-primary flex items-center gap-2 px-6 py-2.5"
+                className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed h-[42px]"
                 disabled={!selectedYear || availableTranscriptYears.length === 0}
               >
-                <FiDownload size={18} />
-                Download
+                <FiDownload size={20} />
+                <span>Download</span>
               </button>
               
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-xl py-1 z-50 border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5">
+                <div className="absolute right-0 mt-2 w-full sm:w-48 bg-card rounded-xl shadow-2xl py-2 z-50 border border-border overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                   <button
                     onClick={() => handleDownloadTranscript('json')}
-                    className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="block w-full text-left px-5 py-3.5 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   >
                     Download JSON
                   </button>
+                  <div className="h-px bg-border mx-2" />
                   <button
                     onClick={() => handleDownloadTranscript('pdf')}
-                    className="block w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="block w-full text-left px-5 py-3.5 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   >
                     Download PDF
                   </button>
@@ -172,13 +177,37 @@ const TranscriptPage = () => {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-border pt-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">What&apos;s included in the transcript?</h3>
-            <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                <li>Detailed module scores and descriptors.</li>
-                <li>Overall course performance and demonstrated competencies.</li>
-                <li>Official registrar signature and seal (PDF only).</li>
-            </ul>
+        <div className="mt-10 border-t border-border pt-8">
+            <h3 className="text-xl font-bold text-foreground mb-6">What&apos;s included in the transcript?</h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="flex items-start gap-3">
+                    <div className="mt-1 bg-primary/10 p-1 rounded-full">
+                        <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-foreground">Detailed Scores</p>
+                        <p className="text-sm text-muted-foreground mt-1">Comprehensive breakdown of module scores and descriptors.</p>
+                    </div>
+                </div>
+                <div className="flex items-start gap-3">
+                    <div className="mt-1 bg-primary/10 p-1 rounded-full">
+                        <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-foreground">Competencies</p>
+                        <p className="text-sm text-muted-foreground mt-1">Verified course performance and demonstrated achievements.</p>
+                    </div>
+                </div>
+                <div className="flex items-start gap-3">
+                    <div className="mt-1 bg-primary/10 p-1 rounded-full">
+                        <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-foreground">Official Validation</p>
+                        <p className="text-sm text-muted-foreground mt-1">Official registrar signature and secure digital seal (PDF).</p>
+                    </div>
+                </div>
+            </div>
         </div>
       </div>
     </div>
