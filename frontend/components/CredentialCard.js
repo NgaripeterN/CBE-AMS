@@ -46,26 +46,26 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
         variants={cardVariants}
         className="bg-card text-card-foreground rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-2 border-border h-full flex flex-col"
       >
-        <div className={`p-6 bg-gradient-to-br ${isCourse ? 'from-primary/20 to-card' : 'from-secondary/20 to-card'} flex-grow`}>
-          <div className="flex justify-between items-start">
-            <h2 className="text-2xl font-bold text-foreground">{title}</h2>
-            <span className={`px-3 py-1 text-sm font-semibold rounded-full ${isCourse ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-muted-foreground'}`}>
+        <div className={`p-4 sm:p-6 bg-gradient-to-br ${isCourse ? 'from-primary/20 to-card' : 'from-secondary/20 to-card'} flex-grow`}>
+          <div className="flex justify-between items-start gap-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">{title}</h2>
+            <span className={`px-3 py-1 text-xs sm:text-sm font-semibold rounded-full shrink-0 ${isCourse ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-muted-foreground'}`}>
               {credentialType}
             </span>
           </div>
-          <p className="mt-2 text-muted-foreground">{description}</p>
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground line-clamp-3">{description}</p>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {credential.txHash && (
             <div className="mb-6 border-b border-border pb-4">
               <div className="flex items-center text-sm text-muted-foreground">
-                <FiCheckCircle className="text-green-500 mr-2" />
+                <FiCheckCircle className="text-green-500 mr-2 shrink-0" />
                 <span>Status:</span>
                 <span className="font-semibold text-green-500 ml-1">{credential.verificationStatus || 'Issued'}</span>
               </div>
               <div className="flex items-center text-sm text-muted-foreground mt-2">
-                <FiExternalLink className="mr-2" />
+                <FiExternalLink className="mr-2 shrink-0" />
                 <span>Transaction:</span>
                 <a href={`https://sepolia.etherscan.io/tx/${credential.txHash}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1 truncate">
                   {credential.txHash}
@@ -74,7 +74,7 @@ const CredentialCard = ({ credential, onUpdate, isCourse = false }) => {
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 text-xs sm:text-sm">
             <ActionButton icon={<FiEye />} text="Details" onClick={handleOpenDetailsModal} />
             <ActionButton icon={<FiShare2 />} text="Share" onClick={handleOpenShareModal} />
             <ActionButton icon={<FiFileText />} text="JSON" onClick={handleDownloadJson} />

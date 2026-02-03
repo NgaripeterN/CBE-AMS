@@ -90,10 +90,10 @@ const Wallet = () => {
 
   return (
     <div className="min-h-screen text-foreground">
-      <header className="bg-gradient-to-r from-primary to-secondary text-primary-foreground py-12 sm:py-20">
+      <header className="bg-gradient-to-r from-primary to-secondary text-primary-foreground py-10 sm:py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.h1 
-            className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight"
+            className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
@@ -113,7 +113,7 @@ const Wallet = () => {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8">
-          <div className="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-4 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
             <TabButton title="Micro-Credentials" activeTab={activeTab} setActiveTab={() => setActiveTab('micro')} />
             <TabButton title="Course Credentials" activeTab={activeTab} setActiveTab={() => setActiveTab('course')} />
           </div>
@@ -196,7 +196,7 @@ const Wallet = () => {
                 courseCredentials.map((courseCred) => (
                   <motion.div key={courseCred.id} variants={containerVariants}>
                     <CredentialCard credential={courseCred} onUpdate={handleUpdateCredential} isCourse />
-                    <div className="relative mt-8 ml-4 sm:ml-12 pl-8 border-l-2 border-primary/20">
+                    <div className="relative mt-8 ml-2 sm:ml-12 pl-6 sm:pl-8 border-l-2 border-primary/20">
                       <div className="absolute -left-4 top-2 w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
                         <svg className="w-4 h-4 text-secondary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                       </div>
