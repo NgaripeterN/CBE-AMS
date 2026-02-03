@@ -88,6 +88,11 @@ const Wallet = () => {
     }
   };
 
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
   return (
     <div className="min-h-screen text-foreground">
       <header className="bg-gradient-to-r from-primary to-secondary text-primary-foreground py-10 sm:py-20">
@@ -159,13 +164,13 @@ const Wallet = () => {
                       >
                         <div className="pt-4">
                             <motion.div 
-                              className="grid gap-8 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                              className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
                               variants={containerVariants}
                               initial="hidden"
                               animate="visible"
                             >
                               {groupedByYear[year][semester].map((credential) => (
-                                <motion.div key={credential.id} variants={containerVariants} className="h-full">
+                                <motion.div key={credential.id} variants={itemVariants} className="h-full">
                                   <CredentialCard credential={credential} onUpdate={handleUpdateCredential} />
                                 </motion.div>
                               ))}
@@ -194,21 +199,23 @@ const Wallet = () => {
             >
               {courseCredentials.length > 0 ? (
                 courseCredentials.map((courseCred) => (
-                  <motion.div key={courseCred.id} variants={containerVariants}>
-                    <CredentialCard credential={courseCred} onUpdate={handleUpdateCredential} isCourse />
+                  <motion.div key={courseCred.id} variants={containerVariants} initial="hidden" animate="visible">
+                    <motion.div variants={itemVariants}>
+                      <CredentialCard credential={courseCred} onUpdate={handleUpdateCredential} isCourse />
+                    </motion.div>
                     <div className="relative mt-8 ml-2 sm:ml-12 pl-6 sm:pl-8 border-l-2 border-primary/20">
                       <div className="absolute -left-4 top-2 w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
                         <svg className="w-4 h-4 text-secondary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
                       </div>
                       <h3 className="text-2xl font-semibold mb-6 text-primary">Evidence (Micro-Credentials)</h3>
                       <motion.div 
-                        className="grid gap-8 sm:grid-cols-1 lg:grid-cols-2"
+                        className="grid gap-6 grid-cols-1 lg:grid-cols-2"
                         variants={containerVariants}
                       >
                         {microCredentials
                           .filter(mc => (courseCred.evidenceMicroCredentialIds || []).includes(mc.id))
                           .map(microCred => (
-                            <motion.div key={microCred.id} variants={containerVariants}>
+                            <motion.div key={microCred.id} variants={itemVariants}>
                               <CredentialCard credential={microCred} onUpdate={handleUpdateCredential} />
                             </motion.div>
                           ))}

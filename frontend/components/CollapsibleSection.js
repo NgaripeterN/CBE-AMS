@@ -4,11 +4,15 @@ import { ChevronDownIcon } from '@heroicons/react/24/solid';
 
 const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
+    const [overflow, setOverflow] = useState(defaultOpen ? 'visible' : 'hidden');
 
     return (
         <div className="mb-2 rounded-lg border border-border bg-card shadow-sm">
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => {
+                    if (isOpen) setOverflow('hidden');
+                    setIsOpen(!isOpen);
+                }}
                 className="w-full flex justify-between items-center p-4 text-left"
             >
                 <h3 className="text-lg font-semibold text-foreground">{title}</h3>
@@ -28,7 +32,13 @@ const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
                             collapsed: { opacity: 0, height: 0 },
                         }}
                         transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="px-4 pb-4 overflow-hidden"
+                        className="px-4 pb-4"
+                        style={{ overflow }}
+                        onAnimationComplete={(definition) => {
+                            if (definition === 'open') {
+                                setOverflow('visible');
+                            }
+                        }}
                     >
                         {children}
                     </motion.div>
