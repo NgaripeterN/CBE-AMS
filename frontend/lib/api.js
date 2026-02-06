@@ -459,9 +459,9 @@ export const getCredentialTrackingData = async () => {
   }
 };
 
-export const getStudentProgressData = async (page = 1, moduleId = '') => {
+export const getStudentProgressData = async (page = 1, moduleId = '', studentId = '') => {
   try {
-    const { data } = await api.get(`/assessor/student-progress?page=${page}&moduleId=${moduleId}`);
+    const { data } = await api.get(`/assessor/student-progress?page=${page}&moduleId=${moduleId}&studentId=${studentId}`);
     return data;
   } catch (error) {
     if (error.response) {

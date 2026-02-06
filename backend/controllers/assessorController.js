@@ -297,6 +297,7 @@ const getCredentialTrackingData = async (req, res) => {
 // @access  Private/Assessor
 const getStudentProgressData = async (req, res) => {
   const { userId, leadForCourseId } = req.user;
+  const { moduleId: queryModuleId, studentId: queryStudentId } = req.query;
   const page = parseInt(req.query.page) || 1;
   const pageSize = 10;
 
@@ -304,7 +305,27 @@ const getStudentProgressData = async (req, res) => {
     let students;
     let moduleIds;
 
-    if (leadForCourseId) {
+    // Base where clause for enrollments
+    let enrollmentWhere = {};
+
+    if (queryStudentId) {
+      // Find the specific student first to get their internal ID if a user_id was passed, or just use the ID
+      // Assuming queryStudentId is the internal student ID (cuid) from the frontend
+      enrollmentWhere.student_id = queryStudentId;
+    }
+
+    if (queryModuleId) {
+      moduleIds = [queryModuleId];
+      enrollmentWhere.module_id = queryModuleId;
+      
+      const enrollments = await prisma.enrollment.findMany({
+        where: enrollmentWhere,
+        include: {
+          student: { include: { user: true } },
+        },
+      });
+      students = enrollments.map(e => e.student);
+    } else if (leadForCourseId) {
       // Lead assessor: get all students in the course
       const modulesInCourse = await prisma.module.findMany({
         where: { course_id: leadForCourseId },
@@ -312,8 +333,10 @@ const getStudentProgressData = async (req, res) => {
       });
       moduleIds = modulesInCourse.map(m => m.module_id);
 
+      enrollmentWhere.module_id = { in: moduleIds };
+
       const enrollments = await prisma.enrollment.findMany({
-        where: { module_id: { in: moduleIds } },
+        where: enrollmentWhere,
         include: {
           student: { include: { user: true } },
         },
@@ -328,11 +351,11 @@ const getStudentProgressData = async (req, res) => {
       });
       moduleIds = moduleAssignments.map(m => m.moduleId);
 
+      enrollmentWhere.module_id = { in: moduleIds };
+      enrollmentWhere.assessor_id = assessor.id;
+
       const enrollments = await prisma.enrollment.findMany({
-        where: {
-          module_id: { in: moduleIds },
-          assessor_id: assessor.id,
-        },
+        where: enrollmentWhere,
         include: {
           student: { include: { user: true } },
         },
@@ -345,6 +368,32 @@ const getStudentProgressData = async (req, res) => {
     const totalStudents = uniqueStudents.length;
     const paginatedStudents = uniqueStudents.slice((page - 1) * pageSize, page * pageSize);
 
+    // Get total assessments for these modules to calculate progress
+    const assessmentsPerModule = await prisma.assessment.groupBy({
+      by: ['module_id'],
+      _count: { assessment_id: true },
+      where: { module_id: { in: moduleIds } },
+    });
+
+    const assessmentCountMap = assessmentsPerModule.reduce((acc, curr) => {
+      acc[curr.module_id] = curr._count.assessment_id;
+      return acc;
+    }, {});
+
+    const totalExpectedAssessments = moduleIds.reduce((sum, id) => sum + (assessmentCountMap[id] || 0), 0);
+
+    // Fetch total competencies for these modules
+    const competenciesInModules = await prisma.competency.findMany({
+      where: {
+        modules: {
+          some: {
+            module_id: { in: moduleIds }
+          }
+        }
+      },
+      select: { id: true, name: true, description: true }
+    });
+    const totalCompetenciesCount = competenciesInModules.length;
 
     // Now, for each student, get their progress data
     const studentProgressData = await Promise.all(
@@ -359,6 +408,27 @@ const getStudentProgressData = async (req, res) => {
           include: { assessment: { include: { module: true } } },
         });
 
+        const parsedSubmissions = submissions.map(sub => {
+            let grade = sub.grade;
+            try {
+                if (typeof grade === 'string') grade = JSON.parse(grade);
+            } catch (e) { console.error('Error parsing grade:', e); }
+
+            let rubric = sub.assessment.rubric;
+            try {
+                if (typeof rubric === 'string') rubric = JSON.parse(rubric);
+            } catch (e) { console.error('Error parsing rubric:', e); }
+
+            return {
+                ...sub,
+                grade,
+                assessment: {
+                    ...sub.assessment,
+                    rubric
+                }
+            };
+        });
+
         const observations = await prisma.observation.findMany({
           where: {
             students: {
@@ -371,10 +441,98 @@ const getStudentProgressData = async (req, res) => {
           include: { module: true },
         });
 
+        // Get all successful evidence with competency details
+        const allEvidence = await prisma.studentCompetencyEvidence.findMany({
+          where: {
+            studentId: student.id,
+            moduleId: { in: moduleIds },
+            status: 'SUCCESS'
+          },
+          include: { competency: true }
+        });
+
+        // Initialize map with all module competencies
+        const competencyMap = {};
+        competenciesInModules.forEach(c => {
+            competencyMap[c.id] = {
+                id: c.id,
+                name: c.name,
+                description: c.description,
+                count: 0,      // Demonstrated
+                totalCount: 0  // Tested/Attempted
+            };
+        });
+
+        // 1. Calculate Demonstrated & Observation Tests
+        allEvidence.forEach(ev => {
+            if (!competencyMap[ev.competencyId]) {
+                // In case a competency was removed from module but evidence remains, or other edge case
+                competencyMap[ev.competencyId] = {
+                    id: ev.competencyId,
+                    name: ev.competency.name,
+                    description: ev.competency.description,
+                    count: 0,
+                    totalCount: 0
+                };
+            }
+            competencyMap[ev.competencyId].count += 1;
+            
+            // If evidence is from observation, it counts as a "test" too (1 attempt, 1 success)
+            if (ev.observationId) {
+                competencyMap[ev.competencyId].totalCount += 1;
+            }
+        });
+
+        // 2. Calculate Assessment Tests (from Graded Submissions)
+        parsedSubmissions.forEach(sub => {
+            if (sub.gradedAt) { // Only count graded attempts
+                let rubric = sub.assessment.rubric; // Already parsed above
+
+                if (rubric && rubric.questions && Array.isArray(rubric.questions)) {
+                    rubric.questions.forEach(q => {
+                        if (q.competencyIds && Array.isArray(q.competencyIds)) {
+                            q.competencyIds.forEach(cId => {
+                                if (competencyMap[cId]) {
+                                    competencyMap[cId].totalCount += 1;
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        });
+
+        // Create list of competencies with stats
+        const competencyDetails = Object.values(competencyMap)
+            .filter(c => c.totalCount > 0 || c.count > 0) // Only show relevant ones? Or show all. Let's show all active.
+            .sort((a, b) => b.count - a.count); // Sort by mastery
+
+        const competenciesMasteredCount = competencyDetails.filter(c => c.count > 0).length;
+
+        const completedAssessmentsCount = parsedSubmissions.length;
+        const progressPercentage = totalExpectedAssessments > 0 
+          ? Math.round((completedAssessmentsCount / totalExpectedAssessments) * 100) 
+          : 0;
+
+        // Simple At-Risk logic
+        const isAtRisk = totalExpectedAssessments > 0 && completedAssessmentsCount === 0;
+
         return {
           student: student.user,
-          submissions,
+          submissions: parsedSubmissions,
           observations,
+          competencyDetails, 
+          stats: {
+            totalAssessments: totalExpectedAssessments,
+            completedAssessments: completedAssessmentsCount,
+            progressPercentage,
+            isAtRisk,
+            totalCompetencies: totalCompetenciesCount,
+            competenciesMastered: competenciesMasteredCount,
+            lastActivity: parsedSubmissions.length > 0 
+              ? parsedSubmissions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0].createdAt 
+              : null
+          }
         };
       })
     );

@@ -64,7 +64,37 @@ const getEnrolledStudents = async (req, res) => {
         },
       },
     });
-    res.json(enrollments);
+
+    // Get total assessments for this module
+    const totalAssessments = await prisma.assessment.count({
+      where: { module_id: id },
+    });
+
+    const enrollmentsWithProgress = await Promise.all(enrollments.map(async (enrollment) => {
+      const completedAssessments = await prisma.submission.count({
+        where: {
+          student_id: enrollment.student.id,
+          assessment: {
+            module_id: id
+          }
+        }
+      });
+
+      const percentage = totalAssessments > 0 
+        ? Math.round((completedAssessments / totalAssessments) * 100) 
+        : 0;
+
+      return {
+        ...enrollment,
+        progress: {
+          completed: completedAssessments,
+          total: totalAssessments,
+          percentage
+        }
+      };
+    }));
+
+    res.json(enrollmentsWithProgress);
   } catch (error) {
     console.error(`Error fetching students for module ${id}:`, error);
     res.status(500).json({ error: 'An error occurred while fetching module students' });

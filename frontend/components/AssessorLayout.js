@@ -64,7 +64,6 @@ const AssessorLayout = ({ children }) => {
         { href: '/assessor', label: 'Home', icon: HomeIcon },
         { href: '/assessor/my-course', label: 'My Course', icon: BookOpenIcon },
         { href: '/assessor/my-modules', label: 'My Modules', icon: RectangleStackIcon },
-        { href: '/assessor/student-progress', label: 'Student Progress', icon: ChartBarIcon },
         { href: '/assessor/credential-tracking', label: 'Credential Tracking', icon: AcademicCapIcon }
       ];
     }
@@ -73,7 +72,6 @@ const AssessorLayout = ({ children }) => {
     navItems = [
       { href: '/assessor', label: 'Home', icon: HomeIcon },
       { href: '/assessor/my-modules', label: 'My Modules', icon: RectangleStackIcon },
-      { href: '/assessor/student-progress', label: 'Student Progress', icon: ChartBarIcon },
     ];
   }
 
