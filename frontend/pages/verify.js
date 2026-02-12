@@ -62,117 +62,127 @@ const VerificationResult = ({ result }) => {
                 </div>
             </div>
             
-            <div className="p-6 grid gap-6 md:grid-cols-2">
-                <div className="space-y-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-                        <DocumentCheckIcon className="h-5 w-5 text-primary" />
-                        Credential Details
-                    </h3>
-                    <dl className="space-y-3 text-sm">
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Subject</dt>
-                            <dd className="font-medium text-foreground">{payload.credentialSubject?.name || 'Not available'}</dd>
-                        </div>
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Email</dt>
-                            <dd className="font-medium text-foreground">{payload.recipient?.identity || 'Not available'}</dd>
-                        </div>
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Registration Number</dt>
-                            <dd className="font-medium text-foreground">{payload.credentialSubject?.registrationNumber || 'Not available'}</dd>
-                        </div>
-                         <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Title</dt>
-                            <dd className="font-medium text-foreground">{payload.badge?.name || 'Not available'}</dd>
-                        </div>
-                        {score !== undefined && score !== null && (
-                            <>
-                                <div className="flex flex-col">
-                                    <dt className="text-muted-foreground">Weighted Average</dt>
-                                    <dd className="font-bold text-primary">{Number(score).toFixed(2)}%</dd>
-                                </div>
-                            </>
-                        )}
-                        {descriptor && (
+            <div className={`relative ${!isValid ? 'grayscale opacity-75' : ''}`}>
+                {!isValid && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                        <span className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-xl uppercase tracking-widest shadow-2xl border-4 border-white transform -rotate-12 opacity-90">
+                            Unverified Content
+                        </span>
+                    </div>
+                )}
+                
+                <div className="p-6 grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+                            <DocumentCheckIcon className="h-5 w-5 text-primary" />
+                            Credential Details {!isValid && <span className="text-[10px] text-red-500 uppercase font-bold">(Unverified)</span>}
+                        </h3>
+                        <dl className="space-y-3 text-sm">
                             <div className="flex flex-col">
-                                <dt className="text-muted-foreground">Descriptor</dt>
-                                <dd className="font-medium text-foreground">
-                                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-mono border border-primary/20">
-                                        {descriptor}
-                                    </span>
-                                </dd>
+                                <dt className="text-muted-foreground">Subject</dt>
+                                <dd className="font-medium text-foreground">{payload.credentialSubject?.name || 'Not available'}</dd>
                             </div>
-                        )}
-                    </dl>
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Email</dt>
+                                <dd className="font-medium text-foreground">{payload.recipient?.identity || 'Not available'}</dd>
+                            </div>
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Registration Number</dt>
+                                <dd className="font-medium text-foreground">{payload.credentialSubject?.registrationNumber || 'Not available'}</dd>
+                            </div>
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Title</dt>
+                                <dd className="font-medium text-foreground">{payload.badge?.name || 'Not available'}</dd>
+                            </div>
+                            {score !== undefined && score !== null && (
+                                <>
+                                    <div className="flex flex-col">
+                                        <dt className="text-muted-foreground">Weighted Average</dt>
+                                        <dd className="font-bold text-primary">{Number(score).toFixed(2)}%</dd>
+                                    </div>
+                                </>
+                            )}
+                            {descriptor && (
+                                <div className="flex flex-col">
+                                    <dt className="text-muted-foreground">Descriptor</dt>
+                                    <dd className="font-medium text-foreground">
+                                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-mono border border-primary/20">
+                                            {descriptor}
+                                        </span>
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+                            <ShieldCheckIcon className="h-5 w-5 text-primary" />
+                            Issuance Information {!isValid && <span className="text-[10px] text-red-500 uppercase font-bold">(Unverified)</span>}
+                        </h3>
+                        <dl className="space-y-3 text-sm">
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Issued By</dt>
+                                <dd className="font-medium text-foreground">{payload.badge?.issuer?.name || 'Not available'}</dd>
+                            </div>
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Issued On</dt>
+                                <dd className="font-medium text-foreground">{payload.issuanceDate ? new Date(payload.issuanceDate).toLocaleDateString(undefined, { dateStyle: 'long' }) : 'Not available'}</dd>
+                            </div>
+                            <div className="flex flex-col">
+                                <dt className="text-muted-foreground">Description</dt>
+                                <dd className="font-medium text-foreground line-clamp-3">{payload.badge?.description || 'Not available'}</dd>
+                            </div>
+                        </dl>
+                    </div>
                 </div>
 
-                <div className="space-y-4">
-                     <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-                        <ShieldCheckIcon className="h-5 w-5 text-primary" />
-                        Issuance Information
-                    </h3>
-                    <dl className="space-y-3 text-sm">
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Issued By</dt>
-                            <dd className="font-medium text-foreground">{payload.badge?.issuer?.name || 'Not available'}</dd>
+                {transcript && transcript.length > 0 && (
+                    <div className="border-t border-border pt-4 p-6">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                            <BookOpenIcon className="h-5 w-5 text-primary" />
+                            Transcript {!isValid && <span className="text-[10px] text-red-500 uppercase font-bold">(Unverified)</span>}
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                            {transcript.map((item, index) => (
+                                <div key={index} className="bg-muted/50 p-3 rounded-md">
+                                    <p><strong>Year {item.year}:</strong> <span className="font-mono">{item.score}%</span></p>
+                                </div>
+                            ))}
                         </div>
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Issued On</dt>
-                            <dd className="font-medium text-foreground">{payload.issuanceDate ? new Date(payload.issuanceDate).toLocaleDateString(undefined, { dateStyle: 'long' }) : 'Not available'}</dd>
+                    </div>
+                )}
+
+                {evidenceModules && evidenceModules.length > 0 && (
+                    <div className="border-t border-border pt-4 p-6">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                            <DocumentTextIcon className="h-5 w-5 text-primary" />
+                            Evidence Modules {!isValid && <span className="text-[10px] text-red-500 uppercase font-bold">(Unverified)</span>}
+                        </h3>
+                        <ul className="list-disc pl-5 text-sm space-y-1">
+                            {evidenceModules.map((module, index) => (
+                                <li key={index} className="text-foreground">{module.title}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {demonstratedCompetencies && demonstratedCompetencies.length > 0 && (
+                    <div className="border-t border-border pt-4 p-6">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
+                            <CogIcon className="h-5 w-5 text-primary" />
+                            Demonstrated Competencies {!isValid && <span className="text-[10px] text-red-500 uppercase font-bold">(Unverified)</span>}
+                        </h3>
+                        <div className="flex flex-wrap gap-2 text-sm">
+                            {demonstratedCompetencies.map((comp, index) => (
+                                <span key={index} className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-xs font-medium">
+                                    {comp.name}
+                                </span>
+                            ))}
                         </div>
-                        <div className="flex flex-col">
-                            <dt className="text-muted-foreground">Description</dt>
-                            <dd className="font-medium text-foreground line-clamp-3">{payload.badge?.description || 'Not available'}</dd>
-                        </div>
-                    </dl>
-                </div>
+                    </div>
+                )}
             </div>
-
-            {transcript && transcript.length > 0 && (
-                <div className="border-t border-border pt-4 p-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
-                        <BookOpenIcon className="h-5 w-5 text-primary" />
-                        Transcript
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        {transcript.map((item, index) => (
-                            <div key={index} className="bg-muted/50 p-3 rounded-md">
-                                <p><strong>Year {item.year}:</strong> <span className="font-mono">{item.score}%</span></p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {evidenceModules && evidenceModules.length > 0 && (
-                <div className="border-t border-border pt-4 p-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
-                        <DocumentTextIcon className="h-5 w-5 text-primary" />
-                        Evidence Modules
-                    </h3>
-                    <ul className="list-disc pl-5 text-sm space-y-1">
-                        {evidenceModules.map((module, index) => (
-                            <li key={index} className="text-foreground">{module.title}</li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-
-            {demonstratedCompetencies && demonstratedCompetencies.length > 0 && (
-                <div className="border-t border-border pt-4 p-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2 text-foreground mb-3">
-                        <CogIcon className="h-5 w-5 text-primary" />
-                        Demonstrated Competencies
-                    </h3>
-                    <div className="flex flex-wrap gap-2 text-sm">
-                        {demonstratedCompetencies.map((comp, index) => (
-                            <span key={index} className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 px-3 py-1 rounded-full text-xs font-medium">
-                                {comp.name}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {isValid && (
                 <div className="bg-muted/30 p-4 border-t border-border text-xs text-muted-foreground flex flex-col md:flex-row justify-between gap-2">

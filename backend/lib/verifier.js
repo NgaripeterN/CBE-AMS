@@ -41,24 +41,31 @@ const verifyOnChain = async (payload) => {
         const provider = getProvider();
         const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, contractAbi, provider);
 
-        const onChainData = await contract.getCredential(hash);
-        
-        const issuerAddress = onChainData[0];
-        const timestamp = Number(onChainData[1]); // Convert BigInt to Number
+        try {
+            const onChainData = await contract.getCredential(hash);
+            
+            const issuerAddress = onChainData[0];
+            const timestamp = Number(onChainData[1]); // Convert BigInt to Number
 
-        if (issuerAddress === ethers.ZeroAddress) {
-            return { isValid: false, reason: "Credential hash not found on the blockchain." };
+            if (issuerAddress === ethers.ZeroAddress) {
+                return { isValid: false, reason: "Credential hash not found on the blockchain." };
+            }
+
+            return {
+                isValid: true,
+                issuerAddress,
+                timestamp: new Date(timestamp * 1000).toISOString(),
+            };
+        } catch (contractError) {
+            if (contractError.message.includes("Credential not found")) {
+                return { isValid: false, reason: "Credential not found on blockchain registry. This document may be fake or tampered with." };
+            }
+            throw contractError;
         }
-
-        return {
-            isValid: true,
-            issuerAddress,
-            timestamp: new Date(timestamp * 1000).toISOString(),
-        };
 
     } catch (error) {
         console.error("On-chain verification failed:", error);
-        return { isValid: false, reason: `An error occurred during verification: ${error.message}` };
+        return { isValid: false, reason: `Verification error: ${error.reason || error.message}` };
     }
 };
 
